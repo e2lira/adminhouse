@@ -134,3 +134,5 @@
 | SECRETS-001 | Done 2026-11-17: SMTP passwords moved out of versioned files. Pending for the business: rotate the `gmail` and `alpa` SMTP passwords, and set them on the production server (`config/app_local.php` or `EMAIL_GMAIL_PASSWORD` / `EMAIL_ALPA_PASSWORD`) before deploying the new `config/app.php`. | DONE (rotation pending) | security | Claude | 2026-11-17 |
 
 | REPO-001 | First commit to `git@github.com:e2lira/adminhouse.git`: local repository initialized with `.gitignore` and remote; 953 files ready, no secret among them. Pending: user review of the file list, fresh-context review before commit (AGENTS rule), and explicit approval to commit and push; check whether the remote already has content. | TODO - user approval | repository | Claude | 2026-11-17 |
+
+| REPO-001 | Updated: first local commit `4793471` done (on top of remote `de284f1`). Pending: check whether the remote already has content, decide public or private visibility, rotate SMTP passwords, then push with explicit approval. | IN_PROGRESS - push pending | repository | Claude | 2026-11-17 |
