@@ -1,0 +1,1916 @@
+# LANGUAGE translation of CakePHP Application
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2018-12-30 17:45-0600\n"
+"PO-Revision-Date: YYYY-mm-DD HH:MM+ZZZZ\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: Controller/AmenidadCondominioController.php:55;79
+msgid "The amenidad condominio has been saved."
+msgstr ""
+
+#: Controller/AmenidadCondominioController.php:59;83
+msgid "The amenidad condominio could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/AmenidadCondominioController.php:100
+msgid "The amenidad condominio has been deleted."
+msgstr ""
+
+#: Controller/AmenidadCondominioController.php:102
+msgid "The amenidad condominio could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/AmenidadController.php:77;102
+msgid "The amenidad has been saved."
+msgstr ""
+
+#: Controller/AmenidadController.php:81;106
+#: Controller/CondominioController.php:206
+msgid "The amenidad could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/AmenidadController.php:124
+msgid "The amenidad has been deleted."
+msgstr ""
+
+#: Controller/AmenidadController.php:126
+msgid "The amenidad could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/BancoController.php:98;122
+msgid "The banco has been saved."
+msgstr ""
+
+#: Controller/BancoController.php:102;126
+msgid "The banco could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/BancoController.php:143
+msgid "The banco has been deleted."
+msgstr ""
+
+#: Controller/BancoController.php:145
+msgid "The banco could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/CondominioController.php:163;209
+msgid "The condominio has been saved."
+msgstr ""
+
+#: Controller/CondominioController.php:166;213
+msgid "The condominio could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/CondominioController.php:230
+msgid "The condominio has been deleted."
+msgstr ""
+
+#: Controller/CondominioController.php:232
+msgid "The condominio could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/CondominioController.php:297
+#: Controller/CondominoController.php:255
+#: Controller/GastoController.php:277
+msgid "Error uploaded "
+msgstr ""
+
+#: Controller/CondominioController.php:302
+#: Controller/CondominoController.php:260
+#: Controller/GastoController.php:282
+msgid "Error  "
+msgstr ""
+
+#: Controller/CondominioController.php:308
+#: Controller/CondominoController.php:266
+#: Controller/GastoController.php:288
+msgid "Error uploading "
+msgstr ""
+
+#: Controller/CondominioController.php:313
+#: Controller/CondominoController.php:271
+#: Controller/GastoController.php:293
+msgid "System error uploading "
+msgstr ""
+
+#: Controller/CondominioController.php:319
+#: Controller/CondominoController.php:277
+#: Controller/GastoController.php:299
+msgid "No file Selected"
+msgstr ""
+
+#: Controller/CondominoController.php:148;174
+msgid "The condomino has been saved."
+msgstr ""
+
+#: Controller/CondominoController.php:152;178
+msgid "The condomino could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/CondominoController.php:194
+msgid "The condomino has been deleted."
+msgstr ""
+
+#: Controller/CondominoController.php:196
+msgid "The condomino could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/CuotasController.php:128;168
+msgid "The cuota could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/CuotasController.php:164
+msgid "The cuota has been saved."
+msgstr ""
+
+#: Controller/CuotasController.php:197
+msgid "The cuota has been deleted."
+msgstr ""
+
+#: Controller/CuotasController.php:199
+msgid "The cuota could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/FoliosController.php:105;138
+msgid "The folio has been saved."
+msgstr ""
+
+#: Controller/FoliosController.php:109;142
+msgid "The folio could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/FoliosController.php:159
+msgid "The folio has been deleted."
+msgstr ""
+
+#: Controller/FoliosController.php:161
+msgid "The folio could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/GastoController.php:131;188
+msgid "The gasto has been saved."
+msgstr ""
+
+#: Controller/GastoController.php:134;192
+msgid "The gasto could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/GastoController.php:210
+msgid "The gasto has been deleted."
+msgstr ""
+
+#: Controller/GastoController.php:212
+msgid "The gasto could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/PagoController.php:141;391
+msgid "The pago has been saved."
+msgstr ""
+
+#: Controller/PagoController.php:145;395
+msgid "The pago could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/PagoController.php:414
+msgid "The pago has been deleted."
+msgstr ""
+
+#: Controller/PagoController.php:416
+msgid "The pago could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/PendientesController.php:55;79
+msgid "The pendiente has been saved."
+msgstr ""
+
+#: Controller/PendientesController.php:59;83
+msgid "The pendiente could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/PendientesController.php:100
+msgid "The pendiente has been deleted."
+msgstr ""
+
+#: Controller/PendientesController.php:102
+msgid "The pendiente could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/PerfilController.php:55;79
+msgid "The perfil has been saved."
+msgstr ""
+
+#: Controller/PerfilController.php:59;83
+msgid "The perfil could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/PerfilController.php:100
+msgid "The perfil has been deleted."
+msgstr ""
+
+#: Controller/PerfilController.php:102
+msgid "The perfil could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/ProveedoresController.php:121;145
+msgid "The proveedore has been saved."
+msgstr ""
+
+#: Controller/ProveedoresController.php:125;149
+msgid "The proveedore could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/ProveedoresController.php:166
+msgid "The proveedore has been deleted."
+msgstr ""
+
+#: Controller/ProveedoresController.php:168
+msgid "The proveedore could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/RubroController.php:72;96
+msgid "The rubro has been saved."
+msgstr ""
+
+#: Controller/RubroController.php:76;100
+msgid "The rubro could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/RubroController.php:117
+msgid "The rubro has been deleted."
+msgstr ""
+
+#: Controller/RubroController.php:119
+msgid "The rubro could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/TipoCuotaController.php:72;96
+msgid "The tipo cuotum has been saved."
+msgstr ""
+
+#: Controller/TipoCuotaController.php:76;100
+msgid "The tipo cuotum could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/TipoCuotaController.php:117
+msgid "The tipo cuotum has been deleted."
+msgstr ""
+
+#: Controller/TipoCuotaController.php:119
+msgid "The tipo cuotum could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/TipoGastoController.php:72;96
+msgid "The tipo gasto has been saved."
+msgstr ""
+
+#: Controller/TipoGastoController.php:76;100
+msgid "The tipo gasto could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/TipoGastoController.php:117
+msgid "The tipo gasto has been deleted."
+msgstr ""
+
+#: Controller/TipoGastoController.php:119
+msgid "The tipo gasto could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/TipoPagoController.php:72;96
+msgid "The tipo pago has been saved."
+msgstr ""
+
+#: Controller/TipoPagoController.php:76;100
+msgid "The tipo pago could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/TipoPagoController.php:117
+msgid "The tipo pago has been deleted."
+msgstr ""
+
+#: Controller/TipoPagoController.php:119
+msgid "The tipo pago could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/UsersCondominioController.php:55;79
+msgid "The users condominio has been saved."
+msgstr ""
+
+#: Controller/UsersCondominioController.php:59;83
+msgid "The users condominio could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/UsersCondominioController.php:100
+msgid "The users condominio has been deleted."
+msgstr ""
+
+#: Controller/UsersCondominioController.php:102
+msgid "The users condominio could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/UsersController.php:136;173
+msgid "The user has been saved."
+msgstr ""
+
+#: Controller/UsersController.php:140;177
+msgid "The user could not be saved. Please, try again."
+msgstr ""
+
+#: Controller/UsersController.php:195
+msgid "The user has been deleted."
+msgstr ""
+
+#: Controller/UsersController.php:197
+msgid "The user could not be deleted. Please, try again."
+msgstr ""
+
+#: Controller/UsersController.php:214
+msgid "Usuario o contrasenia invalidos, vuelve a intentarlo"
+msgstr ""
+
+#: Template/Amenidad/add.ctp:16
+#: Template/Amenidad/edit.ctp:21
+#: Template/Amenidad/view.ctp:17
+msgid "List Amenidad"
+msgstr ""
+
+#: Template/Amenidad/add.ctp:17
+#: Template/Amenidad/edit.ctp:22
+#: Template/Amenidad/index.ctp:17
+#: Template/Amenidad/view.ctp:19
+#: Template/Condominio/edit.ctp:24
+#: Template/Condominio/view.ctp:19
+#: Template/Condomino/edit.ctp:17
+#: Template/Cuotas/add.ctp:16
+#: Template/Cuotas/index.ctp:15
+#: Template/Folios/add.ctp:16
+#: Template/Folios/index.ctp:15
+#: Template/Gasto/add.ctp:17
+#: Template/Gasto/edit.ctp:22
+#: Template/Gasto/index.ctp:15
+#: Template/Pago/add.ctp:16
+#: Template/Pago/index.ctp:16
+#: Template/Proveedores/add.ctp:15
+#: Template/Proveedores/edit.ctp:22
+#: Template/Proveedores/index.ctp:15
+#: Template/Proveedores/view.ctp:18
+#: Template/Users/add.ctp:16
+#: Template/Users/edit.ctp:16
+#: Template/Users/index.ctp:11
+#: Template/Users/view.ctp:19
+msgid "List Condominio"
+msgstr ""
+
+#: Template/Amenidad/add.ctp:18
+#: Template/Amenidad/edit.ctp:23
+#: Template/Amenidad/index.ctp:18
+#: Template/Condominio/index.ctp:16
+#: Template/Condominio/view.ctp:20
+#: Template/Users/add.ctp:17
+#: Template/Users/edit.ctp:17
+#: Template/Users/index.ctp:12
+#: Template/Users/view.ctp:20
+msgid "New Condominio"
+msgstr ""
+
+#: Template/Amenidad/add.ctp:26
+msgid "Add Amenidad"
+msgstr ""
+
+#: Template/Amenidad/add.ctp:32
+#: Template/Amenidad/edit.ctp:38
+#: Template/AmenidadCondominio/add.ctp:22
+#: Template/AmenidadCondominio/edit.ctp:28
+#: Template/Banco/add.ctp:26
+#: Template/Banco/edit.ctp:32
+#: Template/Condominio/add.ctp:43
+#: Template/Condominio/edit.ctp:51
+#: Template/Condomino/add.ctp:69
+#: Template/Condomino/edit.ctp:49
+#: Template/Cuotas/add.ctp:51
+#: Template/Cuotas/edit.ctp:40
+#: Template/Events/add.ctp:35
+#: Template/Events/edit.ctp:29
+#: Template/Folios/add.ctp:51
+#: Template/Folios/edit.ctp:40
+#: Template/Formulario/add.ctp:61
+#: Template/Formulario/edit.ctp:66
+#: Template/Gasto/add.ctp:61
+#: Template/Gasto/edit.ctp:48
+#: Template/Pago/add.ctp:60
+#: Template/Pago/edit.ctp:53
+#: Template/Pendientes/add.ctp:22
+#: Template/Pendientes/edit.ctp:28
+#: Template/Perfil/add.ctp:21
+#: Template/Perfil/edit.ctp:27
+#: Template/Proveedores/add.ctp:49
+#: Template/Proveedores/edit.ctp:42
+#: Template/Rubro/add.ctp:21
+#: Template/Rubro/edit.ctp:27
+#: Template/TipoCuota/add.ctp:21
+#: Template/TipoCuota/edit.ctp:27
+#: Template/TipoGasto/add.ctp:22
+#: Template/TipoGasto/edit.ctp:28
+#: Template/TipoPago/add.ctp:21
+#: Template/TipoPago/edit.ctp:27
+#: Template/Users/add.ctp:40
+#: Template/Users/edit.ctp:40
+#: Template/Users/reset.ctp:13
+#: View/Helper/FormHelper.php:1927
+msgid "Submit"
+msgstr ""
+
+#: Template/Amenidad/edit.ctp:16
+#: Template/AmenidadCondominio/edit.ctp:11
+#: Template/AmenidadCondominio/index.ctp:33
+#: Template/Banco/edit.ctp:11
+#: Template/Condominio/edit.ctp:19
+#: Template/Cuotas/edit.ctp:17
+#: Template/Events/edit.ctp:11
+#: Template/Folios/edit.ctp:17
+#: Template/Formulario/edit.ctp:13
+#: Template/Formulario/index.ctp:36
+#: Template/Gasto/edit.ctp:16
+#: Template/Pago/edit.ctp:17
+#: Template/Pendientes/edit.ctp:11
+#: Template/Pendientes/index.ctp:33
+#: Template/Perfil/edit.ctp:11
+#: Template/Perfil/index.ctp:31
+#: Template/Proveedores/edit.ctp:16
+#: Template/Rubro/edit.ctp:11
+#: Template/Rubro/index.ctp:39
+#: Template/TipoCuota/edit.ctp:11
+#: Template/TipoCuota/index.ctp:31
+#: Template/TipoGasto/edit.ctp:11
+#: Template/TipoGasto/index.ctp:45
+#: Template/TipoPago/edit.ctp:11
+#: Template/TipoPago/index.ctp:43
+msgid "Delete"
+msgstr ""
+
+#: Template/Amenidad/edit.ctp:18
+#: Template/Amenidad/view.ctp:16
+#: Template/AmenidadCondominio/edit.ctp:13
+#: Template/AmenidadCondominio/index.ctp:33
+#: Template/AmenidadCondominio/view.ctp:11
+#: Template/Banco/edit.ctp:13
+#: Template/Condominio/edit.ctp:21
+#: Template/Condominio/view.ctp:18
+#: Template/Condomino/view.ctp:18
+#: Template/Cuotas/edit.ctp:19
+#: Template/Cuotas/view.ctp:16
+#: Template/Events/edit.ctp:13
+#: Template/Events/view.ctp:11
+#: Template/Folios/edit.ctp:19
+#: Template/Folios/view.ctp:16
+#: Template/Formulario/edit.ctp:15
+#: Template/Formulario/index.ctp:36
+#: Template/Formulario/view.ctp:13
+#: Template/Gasto/edit.ctp:18
+#: Template/Gasto/view.ctp:16
+#: Template/Pago/edit.ctp:19
+#: Template/Pago/view.ctp:17
+#: Template/Pendientes/edit.ctp:13
+#: Template/Pendientes/index.ctp:33
+#: Template/Pendientes/view.ctp:11
+#: Template/Perfil/edit.ctp:13
+#: Template/Perfil/index.ctp:31
+#: Template/Perfil/view.ctp:11
+#: Template/Proveedores/edit.ctp:18
+#: Template/Proveedores/view.ctp:16
+#: Template/Rubro/edit.ctp:13
+#: Template/Rubro/index.ctp:39
+#: Template/Rubro/view.ctp:11
+#: Template/TipoCuota/edit.ctp:13
+#: Template/TipoCuota/index.ctp:31
+#: Template/TipoCuota/view.ctp:11
+#: Template/TipoGasto/edit.ctp:13
+#: Template/TipoGasto/index.ctp:45
+#: Template/TipoGasto/view.ctp:11
+#: Template/TipoPago/edit.ctp:13
+#: Template/TipoPago/index.ctp:43
+#: Template/TipoPago/view.ctp:11
+#: Template/Users/view.ctp:16
+msgid "Are you sure you want to delete # {0}?"
+msgstr ""
+
+#: Template/Amenidad/edit.ctp:32
+#: Template/Amenidad/view.ctp:15
+msgid "Edit Amenidad"
+msgstr ""
+
+#: Template/Amenidad/index.ctp:15;32
+#: Template/AmenidadCondominio/add.ctp:9
+#: Template/AmenidadCondominio/edit.ctp:9
+#: Template/AmenidadCondominio/index.ctp:9;21
+#: Template/AmenidadCondominio/view.ctp:9
+#: Template/Banco/add.ctp:9
+#: Template/Banco/edit.ctp:9
+#: Template/Banco/index.ctp:19
+#: Template/Banco/view.ctp:9
+#: Template/Condominio/edit.ctp:17
+#: Template/Condominio/index.ctp:61
+#: Template/Condomino/index.ctp:34
+#: Template/Condomino/view.ctp:16
+#: Template/Cuotas/edit.ctp:15
+#: Template/Cuotas/index.ctp:36
+#: Template/Events/add.ctp:10
+#: Template/Events/edit.ctp:9
+#: Template/Events/view.ctp:9
+#: Template/Folios/edit.ctp:15
+#: Template/Folios/index.ctp:34
+#: Template/Formulario/add.ctp:11
+#: Template/Formulario/edit.ctp:11
+#: Template/Formulario/index.ctp:11;23
+#: Template/Formulario/view.ctp:11
+#: Template/Gasto/index.ctp:33
+#: Template/Pago/index.ctp:38
+#: Template/Pago/view.ctp:15
+#: Template/Pendientes/add.ctp:9
+#: Template/Pendientes/edit.ctp:9
+#: Template/Pendientes/index.ctp:9;21
+#: Template/Pendientes/view.ctp:9
+#: Template/Perfil/add.ctp:9
+#: Template/Perfil/edit.ctp:9
+#: Template/Perfil/index.ctp:9;20
+#: Template/Perfil/view.ctp:9
+#: Template/Proveedores/index.ctp:34
+#: Template/Rubro/add.ctp:9
+#: Template/Rubro/edit.ctp:9
+#: Template/Rubro/index.ctp:29
+#: Template/Rubro/view.ctp:9
+#: Template/TipoCuota/add.ctp:9
+#: Template/TipoCuota/edit.ctp:9
+#: Template/TipoCuota/index.ctp:9;20
+#: Template/TipoCuota/view.ctp:9
+#: Template/TipoGasto/add.ctp:9
+#: Template/TipoGasto/edit.ctp:9
+#: Template/TipoGasto/index.ctp:33
+#: Template/TipoGasto/view.ctp:9
+#: Template/TipoPago/add.ctp:9
+#: Template/TipoPago/edit.ctp:9
+#: Template/TipoPago/index.ctp:32
+#: Template/TipoPago/view.ctp:9
+#: Template/Users/index.ctp:29
+msgid "Actions"
+msgstr ""
+
+#: Template/Amenidad/index.ctp:16
+#: Template/Amenidad/view.ctp:18
+msgid "New Amenidad"
+msgstr ""
+
+#: Template/Amenidad/index.ctp:51
+#: Template/AmenidadCondominio/index.ctp:41
+#: Template/Banco/index.ctp:39
+#: Template/Condominio/index.ctp:114
+#: Template/Condomino/index.ctp:67
+#: Template/Cuotas/index.ctp:66
+#: Template/Folios/index.ctp:64
+#: Template/Formulario/index.ctp:44
+#: Template/Gasto/index.ctp:64
+#: Template/Pago/index.ctp:79
+#: Template/Pendientes/index.ctp:41
+#: Template/Perfil/index.ctp:39
+#: Template/Proveedores/index.ctp:63
+#: Template/Rubro/index.ctp:47
+#: Template/TipoCuota/index.ctp:39
+#: Template/TipoGasto/index.ctp:53
+#: Template/TipoPago/index.ctp:51
+#: Template/Users/index.ctp:56
+msgid "first"
+msgstr ""
+
+#: Template/Amenidad/index.ctp:52
+#: Template/AmenidadCondominio/index.ctp:42
+#: Template/Banco/index.ctp:40
+#: Template/Condominio/index.ctp:115
+#: Template/Condomino/index.ctp:68
+#: Template/Cuotas/index.ctp:67
+#: Template/Folios/index.ctp:65
+#: Template/Formulario/index.ctp:45
+#: Template/Gasto/index.ctp:65
+#: Template/Pago/index.ctp:80
+#: Template/Pendientes/index.ctp:42
+#: Template/Perfil/index.ctp:40
+#: Template/Proveedores/index.ctp:64
+#: Template/Rubro/index.ctp:48
+#: Template/TipoCuota/index.ctp:40
+#: Template/TipoGasto/index.ctp:54
+#: Template/TipoPago/index.ctp:52
+#: Template/Users/index.ctp:57
+msgid "previous"
+msgstr ""
+
+#: Template/Amenidad/index.ctp:54
+#: Template/AmenidadCondominio/index.ctp:44
+#: Template/Banco/index.ctp:42
+#: Template/Condominio/index.ctp:117
+#: Template/Condomino/index.ctp:70
+#: Template/Cuotas/index.ctp:69
+#: Template/Folios/index.ctp:67
+#: Template/Formulario/index.ctp:47
+#: Template/Gasto/index.ctp:67
+#: Template/Pago/index.ctp:82
+#: Template/Pendientes/index.ctp:44
+#: Template/Perfil/index.ctp:42
+#: Template/Proveedores/index.ctp:66
+#: Template/Rubro/index.ctp:50
+#: Template/TipoCuota/index.ctp:42
+#: Template/TipoGasto/index.ctp:56
+#: Template/TipoPago/index.ctp:54
+#: Template/Users/index.ctp:59
+msgid "next"
+msgstr ""
+
+#: Template/Amenidad/index.ctp:55
+#: Template/AmenidadCondominio/index.ctp:45
+#: Template/Banco/index.ctp:43
+#: Template/Condominio/index.ctp:118
+#: Template/Condomino/index.ctp:71
+#: Template/Cuotas/index.ctp:70
+#: Template/Folios/index.ctp:68
+#: Template/Formulario/index.ctp:48
+#: Template/Gasto/index.ctp:68
+#: Template/Pago/index.ctp:83
+#: Template/Pendientes/index.ctp:45
+#: Template/Perfil/index.ctp:43
+#: Template/Proveedores/index.ctp:67
+#: Template/Rubro/index.ctp:51
+#: Template/TipoCuota/index.ctp:43
+#: Template/TipoGasto/index.ctp:57
+#: Template/TipoPago/index.ctp:55
+#: Template/Users/index.ctp:60
+msgid "last"
+msgstr ""
+
+#: Template/Amenidad/index.ctp:57
+#: Template/AmenidadCondominio/index.ctp:47
+#: Template/Banco/index.ctp:45
+#: Template/Condominio/index.ctp:120
+#: Template/Cuotas/index.ctp:72
+#: Template/Folios/index.ctp:70
+#: Template/Formulario/index.ctp:50
+#: Template/Pendientes/index.ctp:47
+#: Template/Perfil/index.ctp:45
+#: Template/Proveedores/index.ctp:69
+#: Template/Rubro/index.ctp:53
+#: Template/TipoCuota/index.ctp:45
+#: Template/TipoGasto/index.ctp:59
+#: Template/TipoPago/index.ctp:57
+#: Template/Users/index.ctp:62
+msgid "Page {{page}} of {{pages}}, showing {{current}} record(s) out of {{count}} total"
+msgstr ""
+
+#: Template/Amenidad/view.ctp:16
+msgid "Delete Amenidad"
+msgstr ""
+
+#: Template/Amenidad/view.ctp:34
+msgid "Color"
+msgstr ""
+
+#: Template/Amenidad/view.ctp:38
+msgid "Amenidad"
+msgstr ""
+
+#: Template/Amenidad/view.ctp:42
+#: Template/AmenidadCondominio/view.ctp:28
+msgid "Id Amenidad"
+msgstr ""
+
+#: Template/AmenidadCondominio/add.ctp:10
+#: Template/AmenidadCondominio/edit.ctp:16
+#: Template/AmenidadCondominio/view.ctp:12
+msgid "List Amenidad Condominio"
+msgstr ""
+
+#: Template/AmenidadCondominio/add.ctp:16
+msgid "Add Amenidad Condominio"
+msgstr ""
+
+#: Template/AmenidadCondominio/edit.ctp:22
+#: Template/AmenidadCondominio/view.ctp:10
+msgid "Edit Amenidad Condominio"
+msgstr ""
+
+#: Template/AmenidadCondominio/index.ctp:10
+#: Template/AmenidadCondominio/view.ctp:13
+msgid "New Amenidad Condominio"
+msgstr ""
+
+#: Template/AmenidadCondominio/index.ctp:14
+msgid "Amenidad Condominio"
+msgstr ""
+
+#: Template/AmenidadCondominio/index.ctp:31
+#: Template/Banco/index.ctp:30
+#: Template/Formulario/index.ctp:34
+#: Template/Pendientes/index.ctp:31
+#: Template/Perfil/index.ctp:29
+#: Template/Rubro/index.ctp:37
+#: Template/TipoCuota/index.ctp:29
+#: Template/TipoGasto/index.ctp:43
+#: Template/TipoPago/index.ctp:41
+#: View/Helper/PaginatorHelper.php:1220
+msgid "View"
+msgstr ""
+
+#: Template/AmenidadCondominio/index.ctp:32
+#: Template/Formulario/index.ctp:35
+#: Template/Pendientes/index.ctp:32
+#: Template/Perfil/index.ctp:30
+#: Template/Rubro/index.ctp:38
+#: Template/TipoCuota/index.ctp:30
+#: Template/TipoGasto/index.ctp:44
+#: Template/TipoPago/index.ctp:42
+msgid "Edit"
+msgstr ""
+
+#: Template/AmenidadCondominio/view.ctp:11
+msgid "Delete Amenidad Condominio"
+msgstr ""
+
+#: Template/AmenidadCondominio/view.ctp:20
+#: Template/Banco/view.ctp:29
+#: Template/Condominio/view.ctp:49
+#: Template/Cuotas/view.ctp:38
+#: Template/Folios/view.ctp:36
+#: Template/Formulario/view.ctp:82
+#: Template/Pago/view.ctp:46
+msgid "Id Condominio"
+msgstr ""
+
+#: Template/AmenidadCondominio/view.ctp:24
+#: Template/Events/view.ctp:24
+#: Template/Folios/view.ctp:32
+#: Template/Proveedores/view.ctp:30
+msgid "Id"
+msgstr ""
+
+#: Template/Banco/add.ctp:10
+#: Template/Banco/edit.ctp:16
+#: Template/Banco/view.ctp:10
+msgid "List Banco"
+msgstr ""
+
+#: Template/Banco/add.ctp:16
+msgid "Add Banco"
+msgstr ""
+
+#: Template/Banco/edit.ctp:22
+msgid "Edit Banco"
+msgstr ""
+
+#: Template/Banco/view.ctp:17
+msgid "Id Movimiento"
+msgstr ""
+
+#: Template/Banco/view.ctp:21
+#: Template/Pago/view.ctp:42
+msgid "Id Pago"
+msgstr ""
+
+#: Template/Banco/view.ctp:25
+msgid "Id Cargo"
+msgstr ""
+
+#: Template/Banco/view.ctp:33
+msgid "Cargo"
+msgstr ""
+
+#: Template/Banco/view.ctp:37
+#: Template/Pago/view.ctp:54
+msgid "Abono"
+msgstr ""
+
+#: Template/Banco/view.ctp:41
+#: Template/Pago/view.ctp:62
+#: Template/Pendientes/view.ctp:28
+msgid "Fecha"
+msgstr ""
+
+#: Template/Condominio/add.ctp:17
+msgid "Lista de Condominios"
+msgstr ""
+
+#: Template/Condominio/add.ctp:26
+msgid "Add Condominio"
+msgstr ""
+
+#: Template/Condominio/edit.ctp:33
+#: Template/Condominio/view.ctp:17
+msgid "Edit Condominio"
+msgstr ""
+
+#: Template/Condominio/view.ctp:18
+msgid "Delete Condominio"
+msgstr ""
+
+#: Template/Condominio/view.ctp:21
+msgid "Pagos"
+msgstr ""
+
+#: Template/Condominio/view.ctp:22
+msgid "Gastos"
+msgstr ""
+
+#: Template/Condominio/view.ctp:33
+msgid "Nombre Condominio"
+msgstr ""
+
+#: Template/Condominio/view.ctp:37
+msgid "Logo"
+msgstr ""
+
+#: Template/Condominio/view.ctp:41
+msgid "Direccion Condominio"
+msgstr ""
+
+#: Template/Condominio/view.ctp:45
+msgid "Banco Cuenta"
+msgstr ""
+
+#: Template/Condominio/view.ctp:53
+msgid "Telefono Condominio"
+msgstr ""
+
+#: Template/Condominio/view.ctp:57
+msgid "No Cuenta Condominio"
+msgstr ""
+
+#: Template/Condominio/view.ctp:61
+msgid "Qr"
+msgstr ""
+
+#: Template/Condominio/view.ctp:66
+msgid "Amenidades Relacionadas"
+msgstr ""
+
+#: Template/Condominio/view.ctp:79
+msgid "Reglamento Condominio"
+msgstr ""
+
+#: Template/Condomino/add.ctp:18
+#: Template/Condomino/edit.ctp:16
+#: Template/Condomino/view.ctp:19
+#: Template/Cuotas/add.ctp:15
+#: Template/Gasto/add.ctp:16
+#: Template/Pago/add.ctp:15
+msgid "List Condomino"
+msgstr ""
+
+#: Template/Condomino/add.ctp:40
+msgid "Add Condomino"
+msgstr ""
+
+#: Template/Condomino/index.ctp:15
+#: Template/Condomino/view.ctp:20
+msgid "New Condomino"
+msgstr ""
+
+#: Template/Condomino/index.ctp:73
+#: Template/Pago/index.ctp:85
+msgid "Page {{page}} of {{pages}}, showing {{current}} record(s)\n                out of {{count}} total"
+msgstr ""
+
+#: Template/Condomino/view.ctp:17
+msgid "Edit Condomino"
+msgstr ""
+
+#: Template/Condomino/view.ctp:18
+msgid "Delete Condomino"
+msgstr ""
+
+#: Template/Condomino/view.ctp:34
+msgid "Residente Condominio"
+msgstr ""
+
+#: Template/Condomino/view.ctp:38
+msgid "Saldo Inicial"
+msgstr ""
+
+#: Template/Condomino/view.ctp:42
+#: Template/Cuotas/view.ctp:50
+msgid "Cuota"
+msgstr ""
+
+#: Template/Condomino/view.ctp:46
+msgid "Numero Contacto"
+msgstr ""
+
+#: Template/Condomino/view.ctp:50
+msgid "Correo Contacto"
+msgstr ""
+
+#: Template/Condomino/view.ctp:54
+msgid "Arrendatario"
+msgstr ""
+
+#: Template/Condomino/view.ctp:58
+msgid "Telefono Arrendatario"
+msgstr ""
+
+#: Template/Condomino/view.ctp:62
+msgid "Marca Auto"
+msgstr ""
+
+#: Template/Condomino/view.ctp:66
+msgid "Modelo Auto"
+msgstr ""
+
+#: Template/Condomino/view.ctp:70
+msgid "Color Auto"
+msgstr ""
+
+#: Template/Condomino/view.ctp:74
+msgid "Placas Auto"
+msgstr ""
+
+#: Template/Condomino/view.ctp:78
+msgid "Condomino"
+msgstr ""
+
+#: Template/Condomino/view.ctp:83
+#: Template/Proveedores/view.ctp:48
+msgid "Nota"
+msgstr ""
+
+#: Template/Cuotas/add.ctp:17
+#: Template/Cuotas/edit.ctp:22
+#: Template/Cuotas/view.ctp:17
+msgid "List Cuotas"
+msgstr ""
+
+#: Template/Cuotas/add.ctp:40
+msgid "Add Cuota"
+msgstr ""
+
+#: Template/Cuotas/edit.ctp:30
+#: Template/Cuotas/view.ctp:15
+msgid "Edit Cuota"
+msgstr ""
+
+#: Template/Cuotas/view.ctp:16
+msgid "Delete Cuota"
+msgstr ""
+
+#: Template/Cuotas/view.ctp:18
+msgid "New Cuota"
+msgstr ""
+
+#: Template/Cuotas/view.ctp:30
+msgid "Cuota Letra"
+msgstr ""
+
+#: Template/Cuotas/view.ctp:34
+msgid "Id Cuotas"
+msgstr ""
+
+#: Template/Cuotas/view.ctp:42
+#: Template/Pago/view.ctp:50
+msgid "Id Condomino"
+msgstr ""
+
+#: Template/Cuotas/view.ctp:46
+#: Template/Gasto/view.ctp:52
+#: Template/TipoCuota/view.ctp:24
+#: Template/TipoGasto/view.ctp:24
+#: Template/TipoPago/view.ctp:24
+msgid "Id Tipo"
+msgstr ""
+
+#: Template/Cuotas/view.ctp:54
+msgid "Fecha Cargo"
+msgstr ""
+
+#: Template/Events/add.ctp:11
+#: Template/Pago/add.ctp:17
+#: Template/Pago/edit.ctp:22
+#: Template/Pago/view.ctp:18
+msgid "List Pago"
+msgstr ""
+
+#: Template/Events/add.ctp:17
+#: Template/Pago/add.ctp:40
+msgid "Add Pago"
+msgstr ""
+
+#: Template/Events/edit.ctp:16
+#: Template/Events/view.ctp:12
+msgid "List Events"
+msgstr ""
+
+#: Template/Events/edit.ctp:22
+#: Template/Events/view.ctp:10
+msgid "Edit Event"
+msgstr ""
+
+#: Template/Events/index.ctp:83
+#: Template/Pages/tablero.ctp:77
+msgid "Add Evento"
+msgstr ""
+
+#: Template/Events/view.ctp:11
+msgid "Delete Event"
+msgstr ""
+
+#: Template/Events/view.ctp:13
+msgid "New Event"
+msgstr ""
+
+#: Template/Events/view.ctp:20
+msgid "Title"
+msgstr ""
+
+#: Template/Events/view.ctp:28
+msgid "Start Event"
+msgstr ""
+
+#: Template/Events/view.ctp:32
+msgid "End Event"
+msgstr ""
+
+#: Template/Folios/add.ctp:17
+#: Template/Folios/edit.ctp:22
+#: Template/Folios/view.ctp:17
+msgid "List Folios"
+msgstr ""
+
+#: Template/Folios/add.ctp:38
+msgid "Add Folio"
+msgstr ""
+
+#: Template/Folios/edit.ctp:30
+#: Template/Folios/view.ctp:15
+msgid "Edit Folio"
+msgstr ""
+
+#: Template/Folios/index.ctp:25
+msgid "Folios"
+msgstr ""
+
+#: Template/Folios/view.ctp:16
+msgid "Delete Folio"
+msgstr ""
+
+#: Template/Folios/view.ctp:18
+msgid "New Folio"
+msgstr ""
+
+#: Template/Folios/view.ctp:40
+msgid "Serie"
+msgstr ""
+
+#: Template/Folios/view.ctp:44
+msgid "Incremento"
+msgstr ""
+
+#: Template/Folios/view.ctp:48
+msgid "Fecha Alta"
+msgstr ""
+
+#: Template/Formulario/add.ctp:12
+#: Template/Formulario/edit.ctp:18
+#: Template/Formulario/view.ctp:14
+msgid "List Formulario"
+msgstr ""
+
+#: Template/Formulario/edit.ctp:24
+#: Template/Formulario/view.ctp:12
+msgid "Edit Formulario"
+msgstr ""
+
+#: Template/Formulario/index.ctp:12
+#: Template/Formulario/view.ctp:15
+msgid "New Formulario"
+msgstr ""
+
+#: Template/Formulario/index.ctp:16
+msgid "Formulario"
+msgstr ""
+
+#: Template/Formulario/view.ctp:13
+msgid "Delete Formulario"
+msgstr ""
+
+#: Template/Formulario/view.ctp:22
+msgid "Nombre Elaboro"
+msgstr ""
+
+#: Template/Formulario/view.ctp:26
+msgid "Imagen Estancia"
+msgstr ""
+
+#: Template/Formulario/view.ctp:30
+msgid "Imagen Escalera"
+msgstr ""
+
+#: Template/Formulario/view.ctp:34
+msgid "Imagen Pasillo"
+msgstr ""
+
+#: Template/Formulario/view.ctp:38
+msgid "Imagen Planta Luz"
+msgstr ""
+
+#: Template/Formulario/view.ctp:42
+msgid "Imagen Cisterna"
+msgstr ""
+
+#: Template/Formulario/view.ctp:46
+msgid "Observaciones Cisterna"
+msgstr ""
+
+#: Template/Formulario/view.ctp:50
+msgid "Imagen Bomba"
+msgstr ""
+
+#: Template/Formulario/view.ctp:54
+msgid "Imagen Estacionamiento"
+msgstr ""
+
+#: Template/Formulario/view.ctp:58
+msgid "Imagen Caldera"
+msgstr ""
+
+#: Template/Formulario/view.ctp:62
+msgid "Imagen Gimnasio"
+msgstr ""
+
+#: Template/Formulario/view.ctp:66
+msgid "Observaciones Gimnasio"
+msgstr ""
+
+#: Template/Formulario/view.ctp:70
+msgid "Imagen Salon"
+msgstr ""
+
+#: Template/Formulario/view.ctp:74
+msgid "Imagen Roof"
+msgstr ""
+
+#: Template/Formulario/view.ctp:78
+msgid "Id Formulario"
+msgstr ""
+
+#: Template/Formulario/view.ctp:86
+msgid "Fecha Creacion"
+msgstr ""
+
+#: Template/Formulario/view.ctp:90
+msgid "Estancia"
+msgstr ""
+
+#: Template/Formulario/view.ctp:91;95;99;103;107;111;115;119;123;127;131;135
+msgid "Yes"
+msgstr ""
+
+#: Template/Formulario/view.ctp:91;95;99;103;107;111;115;119;123;127;131;135
+msgid "No"
+msgstr ""
+
+#: Template/Formulario/view.ctp:94
+msgid "Escalera"
+msgstr ""
+
+#: Template/Formulario/view.ctp:98
+msgid "Pasillo"
+msgstr ""
+
+#: Template/Formulario/view.ctp:102
+msgid "Elevadores"
+msgstr ""
+
+#: Template/Formulario/view.ctp:106
+msgid "Planta Luz"
+msgstr ""
+
+#: Template/Formulario/view.ctp:110
+msgid "Cisterna"
+msgstr ""
+
+#: Template/Formulario/view.ctp:114
+msgid "Bomba"
+msgstr ""
+
+#: Template/Formulario/view.ctp:118
+msgid "Estacionamiento"
+msgstr ""
+
+#: Template/Formulario/view.ctp:122
+msgid "Caldera"
+msgstr ""
+
+#: Template/Formulario/view.ctp:126
+msgid "Gimnasio"
+msgstr ""
+
+#: Template/Formulario/view.ctp:130
+msgid "Salon"
+msgstr ""
+
+#: Template/Formulario/view.ctp:134
+msgid "Roof"
+msgstr ""
+
+#: Template/Formulario/view.ctp:139
+msgid "Observaciones Estancia"
+msgstr ""
+
+#: Template/Formulario/view.ctp:143
+msgid "Observaciones Escalera"
+msgstr ""
+
+#: Template/Formulario/view.ctp:147
+msgid "Observaciones Pasillo"
+msgstr ""
+
+#: Template/Formulario/view.ctp:151
+msgid "Observaciones Elevadores"
+msgstr ""
+
+#: Template/Formulario/view.ctp:155
+msgid "Observaciones Planta Luz"
+msgstr ""
+
+#: Template/Formulario/view.ctp:159
+msgid "Observaciones Bomba"
+msgstr ""
+
+#: Template/Formulario/view.ctp:163
+msgid "Observaciones Estacionamiento"
+msgstr ""
+
+#: Template/Formulario/view.ctp:167
+msgid "Observaciones Caldera"
+msgstr ""
+
+#: Template/Formulario/view.ctp:171
+msgid "Observaciones Salon"
+msgstr ""
+
+#: Template/Formulario/view.ctp:175
+msgid "Observaciones Roof"
+msgstr ""
+
+#: Template/Gasto/add.ctp:18
+#: Template/Gasto/view.ctp:17
+msgid "List Gasto"
+msgstr ""
+
+#: Template/Gasto/add.ctp:42
+#: Template/Gasto/edit.ctp:30
+msgid "Add Gasto"
+msgstr ""
+
+#: Template/Gasto/edit.ctp:21
+msgid "List Gastos"
+msgstr ""
+
+#: Template/Gasto/index.ctp:70
+msgid "Page {{page}} of {{pages}}, showing {{current}}\n                    record(s) out of {{count}} total"
+msgstr ""
+
+#: Template/Gasto/view.ctp:15
+msgid "Edit Gasto"
+msgstr ""
+
+#: Template/Gasto/view.ctp:16
+msgid "Delete Gasto"
+msgstr ""
+
+#: Template/Gasto/view.ctp:18
+msgid "New Gasto"
+msgstr ""
+
+#: Template/Gasto/view.ctp:32
+#: Template/Pago/view.ctp:30
+msgid "Monto Letra"
+msgstr ""
+
+#: Template/Gasto/view.ctp:36
+#: Template/Pago/view.ctp:34
+msgid "Concepto"
+msgstr ""
+
+#: Template/Gasto/view.ctp:40
+#: Template/Pago/view.ctp:38
+msgid "Referencia"
+msgstr ""
+
+#: Template/Gasto/view.ctp:44
+msgid "Recibo"
+msgstr ""
+
+#: Template/Gasto/view.ctp:48
+msgid "Id Gasto"
+msgstr ""
+
+#: Template/Gasto/view.ctp:56
+msgid "Gasto"
+msgstr ""
+
+#: Template/Gasto/view.ctp:60
+#: Template/Pago/view.ctp:58
+msgid "Fecha Pago"
+msgstr ""
+
+#: Template/Layout/error.ctp:35
+#: Template/Error/error400.ctp:36
+#: Template/Error/error500.ctp:41
+msgid "Error"
+msgstr ""
+
+#: Template/Layout/error.ctp:43
+msgid "Back"
+msgstr ""
+
+#: Template/Layout/login.ctp:207
+msgid "Olvido su contraseña?"
+msgstr ""
+
+#: Template/Layout/login.ctp:210
+#: Template/Pages/login.ctp:188
+msgid "Entrar"
+msgstr ""
+
+#: Template/Pago/edit.ctp:15
+msgid "ActiGons"
+msgstr ""
+
+#: Template/Pago/edit.ctp:31
+#: Template/Pago/view.ctp:16
+msgid "Edit Pago"
+msgstr ""
+
+#: Template/Pago/view.ctp:17
+msgid "Delete Pago"
+msgstr ""
+
+#: Template/Pendientes/add.ctp:10
+#: Template/Pendientes/edit.ctp:16
+#: Template/Pendientes/view.ctp:12
+msgid "List Pendientes"
+msgstr ""
+
+#: Template/Pendientes/add.ctp:16
+msgid "Add Pendiente"
+msgstr ""
+
+#: Template/Pendientes/edit.ctp:22
+#: Template/Pendientes/view.ctp:10
+msgid "Edit Pendiente"
+msgstr ""
+
+#: Template/Pendientes/index.ctp:10
+#: Template/Pendientes/view.ctp:13
+msgid "New Pendiente"
+msgstr ""
+
+#: Template/Pendientes/index.ctp:14
+msgid "Pendientes"
+msgstr ""
+
+#: Template/Pendientes/view.ctp:11
+msgid "Delete Pendiente"
+msgstr ""
+
+#: Template/Pendientes/view.ctp:20
+msgid "Contenido"
+msgstr ""
+
+#: Template/Pendientes/view.ctp:24
+msgid "Id Pendientes"
+msgstr ""
+
+#: Template/Perfil/add.ctp:10
+#: Template/Perfil/edit.ctp:16
+#: Template/Perfil/view.ctp:12
+msgid "List Perfil"
+msgstr ""
+
+#: Template/Perfil/add.ctp:16
+msgid "Add Perfil"
+msgstr ""
+
+#: Template/Perfil/edit.ctp:22
+#: Template/Perfil/view.ctp:10
+msgid "Edit Perfil"
+msgstr ""
+
+#: Template/Perfil/index.ctp:10
+#: Template/Perfil/view.ctp:13
+msgid "New Perfil"
+msgstr ""
+
+#: Template/Perfil/index.ctp:14
+#: Template/Perfil/view.ctp:20
+#: Template/Users/view.ctp:42
+msgid "Perfil"
+msgstr ""
+
+#: Template/Perfil/view.ctp:11
+msgid "Delete Perfil"
+msgstr ""
+
+#: Template/Perfil/view.ctp:24
+msgid "Id Perfil"
+msgstr ""
+
+#: Template/Proveedores/add.ctp:16
+#: Template/Proveedores/edit.ctp:21
+#: Template/Proveedores/view.ctp:17
+msgid "List Proveedores"
+msgstr ""
+
+#: Template/Proveedores/add.ctp:38
+msgid "Add Proveedore"
+msgstr ""
+
+#: Template/Proveedores/edit.ctp:34
+#: Template/Proveedores/view.ctp:15
+msgid "Edit Proveedore"
+msgstr ""
+
+#: Template/Proveedores/view.ctp:16
+msgid "Delete Proveedore"
+msgstr ""
+
+#: Template/Proveedores/view.ctp:34
+msgid "Condominio"
+msgstr ""
+
+#: Template/Proveedores/view.ctp:38
+#: Template/Rubro/view.ctp:20
+msgid "Rubro"
+msgstr ""
+
+#: Template/Proveedores/view.ctp:43
+msgid "No. Cuenta"
+msgstr ""
+
+#: Template/Rubro/add.ctp:10
+#: Template/Rubro/edit.ctp:16
+#: Template/Rubro/view.ctp:12
+msgid "List Rubro"
+msgstr ""
+
+#: Template/Rubro/add.ctp:16
+msgid "Add Rubro"
+msgstr ""
+
+#: Template/Rubro/edit.ctp:22
+#: Template/Rubro/view.ctp:10
+msgid "Edit Rubro"
+msgstr ""
+
+#: Template/Rubro/index.ctp:15
+#: Template/Rubro/view.ctp:13
+msgid "New Rubro"
+msgstr ""
+
+#: Template/Rubro/view.ctp:11
+msgid "Delete Rubro"
+msgstr ""
+
+#: Template/Rubro/view.ctp:24
+msgid "Id Rubro"
+msgstr ""
+
+#: Template/TipoCuota/add.ctp:10
+#: Template/TipoCuota/edit.ctp:16
+#: Template/TipoCuota/view.ctp:12
+msgid "List Tipo Cuota"
+msgstr ""
+
+#: Template/TipoCuota/add.ctp:16
+msgid "Add Tipo Cuotum"
+msgstr ""
+
+#: Template/TipoCuota/edit.ctp:22
+#: Template/TipoCuota/view.ctp:10
+msgid "Edit Tipo Cuotum"
+msgstr ""
+
+#: Template/TipoCuota/index.ctp:10
+#: Template/TipoCuota/view.ctp:13
+msgid "New Tipo Cuotum"
+msgstr ""
+
+#: Template/TipoCuota/index.ctp:14
+#: Template/TipoCuota/view.ctp:20
+msgid "Tipo Cuota"
+msgstr ""
+
+#: Template/TipoCuota/view.ctp:11
+msgid "Delete Tipo Cuotum"
+msgstr ""
+
+#: Template/TipoGasto/add.ctp:10
+#: Template/TipoGasto/edit.ctp:16
+#: Template/TipoGasto/view.ctp:12
+msgid "List Tipo Gasto"
+msgstr ""
+
+#: Template/TipoGasto/add.ctp:16
+msgid "Add Tipo Gasto"
+msgstr ""
+
+#: Template/TipoGasto/edit.ctp:22
+#: Template/TipoGasto/view.ctp:10
+msgid "Edit Tipo Gasto"
+msgstr ""
+
+#: Template/TipoGasto/index.ctp:16
+#: Template/TipoGasto/view.ctp:13
+msgid "New Tipo Gasto"
+msgstr ""
+
+#: Template/TipoGasto/view.ctp:11
+msgid "Delete Tipo Gasto"
+msgstr ""
+
+#: Template/TipoGasto/view.ctp:20
+msgid "Tipo Gasto"
+msgstr ""
+
+#: Template/TipoGasto/view.ctp:28
+msgid "Monto"
+msgstr ""
+
+#: Template/TipoPago/add.ctp:10
+#: Template/TipoPago/edit.ctp:16
+#: Template/TipoPago/view.ctp:12
+msgid "List Tipo Pago"
+msgstr ""
+
+#: Template/TipoPago/add.ctp:16
+msgid "Add Tipo Pago"
+msgstr ""
+
+#: Template/TipoPago/edit.ctp:22
+#: Template/TipoPago/view.ctp:10
+msgid "Edit Tipo Pago"
+msgstr ""
+
+#: Template/TipoPago/index.ctp:15
+#: Template/TipoPago/view.ctp:13
+msgid "New Tipo Pago"
+msgstr ""
+
+#: Template/TipoPago/view.ctp:11
+msgid "Delete Tipo Pago"
+msgstr ""
+
+#: Template/TipoPago/view.ctp:20
+msgid "Nombre"
+msgstr ""
+
+#: Template/Users/add.ctp:15
+#: Template/Users/edit.ctp:15
+#: Template/Users/view.ctp:17
+msgid "List Users"
+msgstr ""
+
+#: Template/Users/add.ctp:26
+msgid "Add User"
+msgstr ""
+
+#: Template/Users/edit.ctp:26
+#: Template/Users/view.ctp:15
+msgid "Edit User"
+msgstr ""
+
+#: Template/Users/index.ctp:10
+#: Template/Users/view.ctp:18
+msgid "New User"
+msgstr ""
+
+#: Template/Users/login.ctp:10
+msgid "Please enter your username and password"
+msgstr ""
+
+#: Template/Users/login.ctp:14
+msgid "Login"
+msgstr ""
+
+#: Template/Users/reset.ctp:5
+msgid "Reset Password"
+msgstr ""
+
+#: Template/Users/view.ctp:16
+msgid "Delete User"
+msgstr ""
+
+#: Template/Users/view.ctp:30
+msgid "Password"
+msgstr ""
+
+#: Template/Users/view.ctp:34
+msgid "Email"
+msgstr ""
+
+#: Template/Users/view.ctp:38
+msgid "Id Usuario"
+msgstr ""
+
+#: Template/Users/view.ctp:46
+msgid "Creado"
+msgstr ""
+
+#: Template/Users/view.ctp:50
+msgid "Modificado"
+msgstr ""
+
+#: Template/Users/view.ctp:57
+msgid "Related Condominios"
+msgstr ""
+
+#: Template/Error/error400.ctp:37
+msgid "The requested address {0} was not found on this server."
+msgstr ""
+
+#: Template/Error/error500.ctp:39
+msgid "An Internal Error Has Occurred"
+msgstr ""
+
+#: Controller/Component/AuthComponent.php:494
+msgid "You are not authorized to access that location."
+msgstr ""
+
+#: Controller/Component/CsrfComponent.php:157
+#: Http/Middleware/CsrfProtectionMiddleware.php:190
+msgid "Missing CSRF token cookie"
+msgstr ""
+
+#: Controller/Component/CsrfComponent.php:161
+#: Http/Middleware/CsrfProtectionMiddleware.php:194
+msgid "CSRF token mismatch."
+msgstr ""
+
+#: Error/ExceptionRenderer.php:258
+msgid "Not Found"
+msgstr ""
+
+#: Error/ExceptionRenderer.php:260
+msgid "An Internal Error Has Occurred."
+msgstr ""
+
+#: Http/Response.php:2400
+msgid "The requested file contains `..` and will not be read."
+msgstr ""
+
+#: Http/Response.php:2411
+msgid "The requested file was not found"
+msgstr ""
+
+#: I18n/Number.php:90
+msgid "{0,number,#,###.##} KB"
+msgstr ""
+
+#: I18n/Number.php:92
+msgid "{0,number,#,###.##} MB"
+msgstr ""
+
+#: I18n/Number.php:94
+msgid "{0,number,#,###.##} GB"
+msgstr ""
+
+#: I18n/Number.php:96
+msgid "{0,number,#,###.##} TB"
+msgstr ""
+
+#: I18n/Number.php:88
+msgid "{0,number,integer} Byte"
+msgid_plural "{0,number,integer} Bytes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: I18n/RelativeTimeFormatter.php:80
+msgid "{0} from now"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:80
+msgid "{0} ago"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:83
+msgid "{0} after"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:83
+msgid "{0} before"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:114
+msgid "just now"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:151
+msgid "about a second ago"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:152
+msgid "about a minute ago"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:153
+msgid "about an hour ago"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:154;332
+msgid "about a day ago"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:155;333
+msgid "about a week ago"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:156;334
+msgid "about a month ago"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:157;335
+msgid "about a year ago"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:168
+msgid "in about a second"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:169
+msgid "in about a minute"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:170
+msgid "in about an hour"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:171;346
+msgid "in about a day"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:172;347
+msgid "in about a week"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:173;348
+msgid "in about a month"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:174;349
+msgid "in about a year"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:304
+msgid "today"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:370
+msgid "%s ago"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:371
+msgid "on %s"
+msgstr ""
+
+#: I18n/RelativeTimeFormatter.php:47;126;316
+msgid "{0} year"
+msgid_plural "{0} years"
+msgstr[0] ""
+msgstr[1] ""
+
+#: I18n/RelativeTimeFormatter.php:51;129;319
+msgid "{0} month"
+msgid_plural "{0} months"
+msgstr[0] ""
+msgstr[1] ""
+
+#: I18n/RelativeTimeFormatter.php:57;132;322
+msgid "{0} week"
+msgid_plural "{0} weeks"
+msgstr[0] ""
+msgstr[1] ""
+
+#: I18n/RelativeTimeFormatter.php:59;135;325
+msgid "{0} day"
+msgid_plural "{0} days"
+msgstr[0] ""
+msgstr[1] ""
+
+#: I18n/RelativeTimeFormatter.php:64;138
+msgid "{0} hour"
+msgid_plural "{0} hours"
+msgstr[0] ""
+msgstr[1] ""
+
+#: I18n/RelativeTimeFormatter.php:68;141
+msgid "{0} minute"
+msgid_plural "{0} minutes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: I18n/RelativeTimeFormatter.php:72;144
+msgid "{0} second"
+msgid_plural "{0} seconds"
+msgstr[0] ""
+msgstr[1] ""
+
+#: ORM/RulesChecker.php:57
+msgid "This value is already in use"
+msgstr ""
+
+#: ORM/RulesChecker.php:104
+msgid "This value does not exist"
+msgstr ""
+
+#: ORM/RulesChecker.php:128
+msgid "The count does not match {0}{1}"
+msgstr ""
+
+#: Utility/Text.php:915
+msgid "and"
+msgstr ""
+
+#: Validation/Validator.php:111
+msgid "This field is required"
+msgstr ""
+
+#: Validation/Validator.php:112
+msgid "This field cannot be left empty"
+msgstr ""
+
+#: Validation/Validator.php:1885
+msgid "The provided value is invalid"
+msgstr ""
+
+#: View/Helper/FormHelper.php:1039
+msgid "New %s"
+msgstr ""
+
+#: View/Helper/FormHelper.php:1042
+msgid "Edit %s"
+msgstr ""
+
+#: View/Helper/HtmlHelper.php:795
+msgid "Home"
+msgstr ""
+
+#: View/Widget/DateTimeWidget.php:540
+msgid "January"
+msgstr ""
+
+#: View/Widget/DateTimeWidget.php:541
+msgid "February"
+msgstr ""
+
+#: View/Widget/DateTimeWidget.php:542
+msgid "March"
+msgstr ""
+
+#: View/Widget/DateTimeWidget.php:543
+msgid "April"
+msgstr ""
+
+#: View/Widget/DateTimeWidget.php:544
+msgid "May"
+msgstr ""
+
+#: View/Widget/DateTimeWidget.php:545
+msgid "June"
+msgstr ""
+
+#: View/Widget/DateTimeWidget.php:546
+msgid "July"
+msgstr ""
+
+#: View/Widget/DateTimeWidget.php:547
+msgid "August"
+msgstr ""
+
+#: View/Widget/DateTimeWidget.php:548
+msgid "September"
+msgstr ""
+
+#: View/Widget/DateTimeWidget.php:549
+msgid "October"
+msgstr ""
+
+#: View/Widget/DateTimeWidget.php:550
+msgid "November"
+msgstr ""
+
+#: View/Widget/DateTimeWidget.php:551
+msgid "December"
+msgstr ""
+

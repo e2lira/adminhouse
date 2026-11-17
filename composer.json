@@ -1,0 +1,98 @@
+{
+    "name": "cakephp/app",
+    "description": "CakePHP skeleton app",
+    "homepage": "https://cakephp.org",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=5.6",
+        "ext-ctype": "*",
+        "ext-dom": "*",
+        "ext-fileinfo": "*",
+        "ext-gd": "*",
+        "ext-iconv": "*",
+        "ext-libxml": "*",
+        "ext-mbstring": "*",
+        "ext-simplexml": "*",
+        "ext-xml": "*",
+        "ext-xmlreader": "*",
+        "ext-xmlwriter": "*",
+        "ext-zip": "*",
+        "ext-zlib": "*",
+        "akkaweb/cakephp-ckeditor": "dev-master",
+        "backstageel/cakephp-gentelella-theme": "^1.2",
+        "cakephp/cakephp": "3.9.*",
+        "cakephp/migrations": "^2.0.0",
+        "cakephp/plugin-installer": "^1.0",
+        "dakota/cake-excel": "^2.0",
+        "dompdf/dompdf": "^3.0",
+        "ezyang/htmlpurifier": "^4.13",
+        "falco442/cakephp-3-sweet-alert-helper": "^1.0",
+        "friendsofcake/bootstrap-ui": "^1.4",
+        "friendsofcake/cakepdf": "^3.4",
+        "friendsofcake/cakephp-csvview": "~3.0",
+        "josegonzalez/cakephp-upload": "^4.0",
+        "maennchen/zipstream-php": "^2.1",
+        "markbaker/complex": "^3.0",
+        "markbaker/matrix": "^3.0",
+        "mobiledetect/mobiledetectlib": "2.*",
+        "phpoffice/phpspreadsheet": "^1.19",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.0",
+        "psr/simple-cache": "^1.0",
+        "robotusers/cakephp-excel": "^0.6.0",
+        "setasign/fpdf": "^1.8",
+        "tecnickcom/tcpdf": "^6.2",
+        "villca/numeros-en-letras": "^1.2"
+    },
+    "require-dev": {
+        "cakephp/bake": "^1.9.0",
+        "cakephp/cakephp-codesniffer": "^3.0",
+        "cakephp/debug_kit": "~3.0",
+        "josegonzalez/dotenv": "3.*",
+        "phpunit/phpunit": "^5|^6",
+        "psy/psysh": "@stable"
+    },
+    "suggest": {
+        "markstory/asset_compress": "An asset compression plugin which provides file concatenation and a flexible filter system for preprocessing and minification.",
+        "dereuromark/cakephp-ide-helper": "After baking your code, this keeps your annotations in sync with the code evolving from there on for maximum IDE and PHPStan/Psalm compatibility."
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/",
+            "AkkaCKEditor\\": "./plugins/AkkaCKEditor/src",
+            "PhpOffice\\PhpSpreadsheet\\": "src/PhpSpreadsheet"
+
+
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "App\\Test\\": "tests/",
+            "Cake\\Test\\": "vendor/cakephp/cakephp/tests/",
+            "PhpOffice\\PhpSpreadsheetTests\\": "tests/PhpSpreadsheetTests",
+            "PhpOffice\\PhpSpreadsheetInfra\\": "infra"
+        }
+    },
+    "scripts": {
+        "post-install-cmd": "App\\Console\\Installer::postInstall",
+        "post-create-project-cmd": "App\\Console\\Installer::postInstall",
+        "check": [
+            "@test",
+            "@cs-check"
+        ],
+        "cs-check": "phpcs --colors -p --extensions=php --standard=vendor/cakephp/cakephp-codesniffer/CakePHP src/ tests/ config/ webroot/",
+        "cs-fix": "phpcbf --colors -p --extensions=php --standard=vendor/cakephp/cakephp-codesniffer/CakePHP src/ tests/ config/ webroot/",
+        "stan": "phpstan analyse -l 5 src/",
+        "stan-setup": "cp composer.json composer.backup && composer require --dev phpstan/phpstan-shim:^0.11 && mv composer.backup composer.json",
+        "test": "phpunit --colors=always"
+    },
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "cakephp/plugin-installer": true
+        }
+    }
+
+}

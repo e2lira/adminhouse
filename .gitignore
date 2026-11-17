@@ -1,25 +1,40 @@
-# CakePHP 3
+# Secrets and machine-specific configuration
+/config/app_local.php
+/config/app_local.*.php
+!/config/app_local.example.php
+.env
+.env.*
+!/config/.env.example
 
-/vendor/*
-/config/app.php
+# Dependencies and local runtimes
+/vendor/
+/composer.phar
+/tools/php74/
+/tools/php74.old-*/
+/tools/*.zip
 
-/tmp/cache/models/*
-!/tmp/cache/models/empty
-/tmp/cache/persistent/*
-!/tmp/cache/persistent/empty
-/tmp/cache/views/*
-!/tmp/cache/views/empty
-/tmp/sessions/*
-!/tmp/sessions/empty
-/tmp/tests/*
-!/tmp/tests/empty
+# Private and generated data (resident files, receipts, logs, caches)
+/webroot/files/
+/webroot/img/files/
+/webroot/*.pdf
+/webroot/img/*.zip
+/logs/
+/tmp/
+error_log
+*.log
+test.xlsx
+*.sql.gz
+*.dump
 
-/logs/*
-!/logs/empty
+# Generated artifacts and local tool state
+/.archify/
+/.orchestrator/
+/.clawhub/
+.phpunit.result.cache
 
-# CakePHP 2
-
-/app/tmp/*
-/app/Config/core.php
-/app/Config/database.php
-/vendors/*
+# Editors and OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

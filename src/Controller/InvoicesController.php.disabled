@@ -1,0 +1,31 @@
+<?php
+    Configure::write('CakePdf', [
+        'engine' => 'CakePdf.WkHtmlToPdf',
+        'margin' => [
+            'bottom' => 15,
+            'left' => 50,
+            'right' => 30,
+            'top' => 45
+        ],
+        'orientation' => 'landscape',
+        'download' => true
+    ]);
+?>
+<?php
+    class InvoicesController extends AppController
+    {
+        // In your Invoices controller you could set additional configs,
+        // or override the global ones:
+        public function view($id = null)
+        {
+            $invoice = $this->Invoice->get($id);
+            $this->viewBuilder()->options([
+                'pdfConfig' => [
+                    'orientation' => 'portrait',
+                    'filename' => 'Invoice_' . $id
+                ]
+            ]);
+            $this->set('invoice', $invoice);
+        }
+    }
+?>
