@@ -18,7 +18,9 @@ use Throwable;
  * A unique or foreign key violation raised by the database anyway (a race) becomes a field error, not a 500, only
  * when that is safe and correctly attributed: the save is the outermost scoped one, it saves no associated entities,
  * it runs in its own transaction (`atomic`), and either no transaction is open around it or savepoints are enabled so
- * the failed statement is rolled back on its own. Anywhere else (saveMany, nested association saves, a caller-held
+ * the failed statement is rolled back on its own, and the violated column belongs to this table (a violation raised
+ * by another table, for example in an afterSave hook, or one that names no column, such as an expression index, cannot
+ * be attributed to a field). Anywhere else (saveMany, nested association saves, a caller-held
  * transaction without savepoints) the PostgreSQL transaction would be left aborted or the violation would be blamed on
  * the wrong entity, so the exception is rethrown untouched.
  */
@@ -40,7 +42,7 @@ trait ScopedOperationTrait
             );
         } catch (Throwable $e) {
             $violation = $convert ? ConstraintViolation::from($e) : null;
-            if ($violation === null) {
+            if ($violation === null || !$this->getSchema()->hasColumn($violation->field())) {
                 throw $e;
             }
             $message = $violation->rule === '_unique'

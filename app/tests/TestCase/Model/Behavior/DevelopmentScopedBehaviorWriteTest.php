@@ -327,6 +327,37 @@ class DevelopmentScopedBehaviorWriteTest extends ScopedTableTestCase
         }
     }
 
+    public function testARequestLikeSessionConvertsASingleEntityViolationAndStaysUsable(): void
+    {
+        $this->insertItem(1, 'taken');
+        $entity = $this->items->newEntity(['name' => 'taken']);
+
+        // Exactly what DevelopmentContext::beginRequest gives a request: an open transaction with savepoints.
+        $this->actAs(null);
+        $this->assertTrue($this->appDb()->inTransaction());
+        $this->assertTrue($this->appDb()->isSavePointsEnabled());
+
+        $this->assertFalse($this->items->save($entity, $this->saveIn(1)));
+        $this->assertArrayHasKey('_unique', $entity->getError('name'));
+        $this->assertNotFalse($this->items->save($this->items->newEntity(['name' => 'after']), $this->saveIn(1)));
+    }
+
+    public function testAViolationOfAnotherTableRaisedInAnAfterSaveHookIsNotAttributedToTheSavedEntity(): void
+    {
+        $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (1, 1, 'dup')");
+        $this->items->getEventManager()->on('Model.afterSave', function (): void {
+            $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (1, 1, 'dup')");
+        });
+        $entity = $this->items->newEntity(['name' => 'saved']);
+
+        try {
+            $this->items->save($entity, $this->saveIn(1));
+            $this->fail('A violation of another table must reach the caller.');
+        } catch (QueryException) {
+            $this->assertSame([], $entity->getErrors());
+        }
+    }
+
     public function testAnInnerScopeMayNarrowTheOperationScopeButNeverWidenIt(): void
     {
         $outcome = [];
@@ -350,13 +381,17 @@ class DevelopmentScopedBehaviorWriteTest extends ScopedTableTestCase
         $this->assertSame('refused', $outcome['wider']);
     }
 
-    public function testAnExpressionIndexViolationIsFlaggedWithoutNamingAColumn(): void
+    public function testAnExpressionIndexViolationIsRethrownBecauseNoColumnCanBeNamed(): void
     {
         $this->db()->execute('CREATE UNIQUE INDEX scoped_items_lower_name ON scoped_items (development_id, lower(name))');
         $this->insertItem(1, 'taken');
         $entity = $this->items->newEntity(['name' => 'TAKEN']);
 
-        $this->assertFalse($this->items->save($entity, $this->saveIn(1)));
-        $this->assertArrayHasKey('_unique', $entity->getError('_constraint'));
+        try {
+            $this->items->save($entity, $this->saveIn(1));
+            $this->fail('A violation that names no column of this table cannot be attributed to a field.');
+        } catch (QueryException) {
+            $this->assertSame([], $entity->getErrors());
+        }
     }
 }
