@@ -18,7 +18,17 @@ class HoldersTable extends Table
     {
         parent::initialize($config);
 
-        $this->setTable('scoped_holders');
-        $this->belongsTo('Items', ['className' => ItemsTable::class, 'foreignKey' => 'item_id']);
+        $this->setTable(ScopedSchema::qualify('scoped_holders'));
+        $this->belongsTo('ScopedItems', [
+            'className' => ItemsTable::class,
+            'foreignKey' => 'item_id',
+            'propertyName' => 'item',
+        ]);
+        // A table that is itself scoped by a composite foreign key, reached here through a plain one.
+        $this->belongsTo('ScopedNotes', [
+            'className' => NotesTable::class,
+            'foreignKey' => 'note_id',
+            'propertyName' => 'note',
+        ]);
     }
 }

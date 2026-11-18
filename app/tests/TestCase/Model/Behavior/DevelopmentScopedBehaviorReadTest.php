@@ -5,7 +5,10 @@ namespace App\Test\TestCase\Model\Behavior;
 
 use App\Authorization\DevelopmentScope;
 use App\Model\Exception\MissingDevelopmentScopeException;
+use App\Test\Support\Scoped\ScopedSchema;
 use App\Test\Support\ScopedTableTestCase;
+use Cake\ORM\Table;
+use LogicException;
 
 /**
  * Layer 1 reads: fail closed without scope, filter by the scope, inherit only through composite foreign keys.
@@ -94,41 +97,166 @@ class DevelopmentScopedBehaviorReadTest extends ScopedTableTestCase
         $item = $this->insertItem(1, 'a1');
         $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (1, $item, 'n1')");
 
-        $found = $this->items->find('all', developmentScope: DevelopmentScope::only([1]))->contain('Notes')->firstOrFail();
+        $found = $this->items->find('all', developmentScope: DevelopmentScope::only([1]))->contain('ScopedNotes')->firstOrFail();
 
         $this->assertSame(['n1'], collection($found->notes)->extract('body')->toList());
     }
 
-    public function testACompositeJoinNeverCrossesDevelopments(): void
+    private function seedNoteForHolder(): void
     {
         $item = $this->insertItem(1, 'a1');
-        $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (2, $item, 'foreign')");
-
-        $found = $this->items->find('all', developmentScope: DevelopmentScope::only([1]))->contain('Notes')->firstOrFail();
-
-        $this->assertSame([], $found->notes);
+        $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (1, $item, 'n1')");
+        $this->appDb()->execute('INSERT INTO scoped_holders (item_id, note_id) VALUES (?, 1)', [$item]);
     }
 
-    public function testAScopedTableReachedFromAnUnscopedOneWithoutScopeThrows(): void
+    public function testACompositeCapableTableContainedFromAnUnscopedParentThrows(): void
     {
-        $item = $this->insertItem(1, 'a1');
-        $this->appDb()->execute("INSERT INTO scoped_holders (item_id) VALUES ($item)");
+        $this->seedNoteForHolder();
 
         $this->expectException(MissingDevelopmentScopeException::class);
 
-        $this->holders->find()->contain('Items')->all();
+        $this->holders->find()->contain('ScopedNotes')->all();
     }
 
-    public function testAnExplicitScopeOnTheContainedQueryIsHonored(): void
+    public function testACompositeCapableTableMatchedFromAnUnscopedParentThrows(): void
+    {
+        $this->seedNoteForHolder();
+
+        $this->expectException(MissingDevelopmentScopeException::class);
+
+        $this->holders->find()->matching('ScopedNotes')->all();
+    }
+
+    public function testACompositeCapableTableJoinedWithInnerJoinWithFromAnUnscopedParentThrows(): void
+    {
+        $this->seedNoteForHolder();
+
+        $this->expectException(MissingDevelopmentScopeException::class);
+
+        $this->holders->find()->innerJoinWith('ScopedNotes')->all();
+    }
+
+    public function testAScopedParentReachingAScopedTableThroughAPlainForeignKeyThrows(): void
+    {
+        $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (2, 1, 'foreign')");
+        $item = $this->insertItem(1, 'a1');
+        $this->appDb()->execute('UPDATE scoped_items SET note_id = 1 WHERE id = ?', [$item]);
+
+        $this->expectException(MissingDevelopmentScopeException::class);
+
+        $this->items->find('all', developmentScope: DevelopmentScope::only([1]))->contain('ScopedLooseNotes')->all();
+    }
+
+    public function testAScopedParentMatchingACompositeTableNeedsAnExplicitScope(): void
     {
         $item = $this->insertItem(1, 'a1');
-        $this->appDb()->execute("INSERT INTO scoped_holders (item_id) VALUES ($item)");
+        $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (1, $item, 'n1')");
 
-        $found = $this->holders->find()->contain([
-            'Items' => ['queryBuilder' => fn($q) => $q->applyOptions(['developmentScope' => DevelopmentScope::only([2])])],
+        $this->expectException(MissingDevelopmentScopeException::class);
+
+        $this->items->find('all', developmentScope: DevelopmentScope::only([1]))->matching('ScopedNotes')->all();
+    }
+
+    public function testAScopedParentMatchingWithAnExplicitScopeFilters(): void
+    {
+        $item = $this->insertItem(1, 'a1');
+        $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (1, $item, 'n1')");
+
+        $rows = $this->items->find('all', developmentScope: DevelopmentScope::only([1]))
+            ->matching('ScopedNotes', fn($q) => $q->applyOptions(['developmentScope' => DevelopmentScope::only([2])]))
+            ->all();
+
+        $this->assertCount(0, $rows);
+    }
+
+    public function testACompositeBelongsToJoinStrategyFiltersByTheParentScope(): void
+    {
+        $item = $this->insertItem(1, 'a1');
+        $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (1, $item, 'n1')");
+
+        $query = $this->notes->find('all', developmentScope: DevelopmentScope::only([1]))->contain('ScopedItems');
+
+        $this->assertSame('a1', $query->firstOrFail()->item->name);
+        $this->assertStringContainsString('ScopedItems.development_id IN', $query->sql());
+        $this->assertCount(0, $this->notes->find('all', developmentScope: DevelopmentScope::only([2]))->contain('ScopedItems')->all());
+    }
+
+    public function testACompositeBelongsToSelectStrategyFiltersByTheParentScope(): void
+    {
+        $item = $this->insertItem(1, 'a1');
+        $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (1, $item, 'n1')");
+
+        $found = $this->notes->find('all', developmentScope: DevelopmentScope::all())
+            ->contain(['ScopedItems' => ['strategy' => 'select']])
+            ->firstOrFail();
+
+        $this->assertSame('a1', $found->item->name);
+    }
+
+    public function testNestedContainKeepsFilteringDownACompositeChain(): void
+    {
+        $item = $this->insertItem(1, 'a1');
+        $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (1, $item, 'n1')");
+
+        $found = $this->notes->find('all', developmentScope: DevelopmentScope::only([1]))
+            ->contain('ScopedItems.ScopedNotes')
+            ->firstOrFail();
+
+        $this->assertSame(['n1'], collection($found->item->notes)->extract('body')->toList());
+    }
+
+    public function testAnExplicitScopeOnAContainedQueryIsNarrowedToTheParentScopeNeverWidened(): void
+    {
+        $item = $this->insertItem(1, 'a1');
+        $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (1, $item, 'n1')");
+        $seen = [];
+        $this->notes->getEventManager()->on(
+            'Model.beforeFind',
+            ['priority' => 20],
+            function ($event, $query, $options) use (&$seen): void {
+                $seen[] = $options['developmentScope'];
+            },
+        );
+
+        $this->items->find('all', developmentScope: DevelopmentScope::only([1]))->contain([
+            'ScopedNotes' => ['queryBuilder' => fn($q) => $q->applyOptions(['developmentScope' => DevelopmentScope::only([1, 2])])],
+        ])->all();
+        $this->items->find('all', developmentScope: DevelopmentScope::all())->contain([
+            'ScopedNotes' => ['queryBuilder' => fn($q) => $q->applyOptions(['developmentScope' => DevelopmentScope::only([2])])],
+        ])->all();
+
+        $this->assertCount(2, $seen);
+        $this->assertSame([1], $seen[0]->ids());
+        $this->assertSame([2], $seen[1]->ids());
+    }
+
+    public function testAManyToManyTargetNeedsAnExplicitScope(): void
+    {
+        $item = $this->insertItem(1, 'a1');
+        $this->appDb()->execute("INSERT INTO scoped_realms (name) VALUES ('r1')");
+        $this->appDb()->execute('INSERT INTO scoped_item_realms (item_id, realm_id) VALUES (?, 1)', [$item]);
+
+        try {
+            $this->items->find('all', developmentScope: DevelopmentScope::all())->contain('ScopedTags')->all();
+            $this->fail('A many-to-many target must not inherit the parent scope.');
+        } catch (MissingDevelopmentScopeException) {
+        }
+
+        $found = $this->items->find('all', developmentScope: DevelopmentScope::all())->contain([
+            'ScopedTags' => ['queryBuilder' => fn($q) => $q->applyOptions(['developmentScope' => DevelopmentScope::only([2])])],
         ])->firstOrFail();
+        $this->assertSame([], $found->tags);
+    }
 
-        $this->assertNull($found->item);
+    public function testAThroughTableWithACompositePrimaryKeyIsRejected(): void
+    {
+        $table = new Table(['table' => ScopedSchema::qualify('scoped_person_links'), 'alias' => 'ScopedLinks']);
+        $table->setPrimaryKey(['person_id', 'development_id']);
+        $table->addBehavior('DevelopmentScoped', ['through' => 'scoped_person_links', 'throughKey' => 'person_id']);
+
+        $this->expectException(LogicException::class);
+
+        $table->find('all', developmentScope: DevelopmentScope::only([1]))->all();
     }
 
     public function testAThroughTableNeverInheritsAScope(): void

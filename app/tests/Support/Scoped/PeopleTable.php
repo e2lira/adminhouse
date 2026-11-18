@@ -18,7 +18,7 @@ class PeopleTable extends Table
     {
         parent::initialize($config);
 
-        $this->setTable('scoped_people');
+        $this->setTable(ScopedSchema::qualify('scoped_people'));
         $this->addBehavior('DevelopmentScoped', ['through' => 'scoped_person_links', 'throughKey' => 'person_id']);
     }
 }

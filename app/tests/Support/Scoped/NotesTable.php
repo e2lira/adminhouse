@@ -18,9 +18,10 @@ class NotesTable extends Table
     {
         parent::initialize($config);
 
-        $this->setTable('scoped_notes');
+        $this->setTable(ScopedSchema::qualify('scoped_notes'));
         $this->addBehavior('DevelopmentScoped');
-        $this->belongsTo('Items', [
+        $this->belongsTo('ScopedItems', [
+            'propertyName' => 'item',
             'className' => ItemsTable::class,
             'foreignKey' => ['development_id', 'item_id'],
             'bindingKey' => ['development_id', 'id'],

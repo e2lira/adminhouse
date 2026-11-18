@@ -18,7 +18,7 @@ class RealmsTable extends Table
     {
         parent::initialize($config);
 
-        $this->setTable('scoped_realms');
+        $this->setTable(ScopedSchema::qualify('scoped_realms'));
         $this->addBehavior('DevelopmentScoped', ['field' => 'id']);
     }
 }

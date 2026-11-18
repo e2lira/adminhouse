@@ -11,6 +11,8 @@ use Cake\Event\EventInterface;
 use Cake\ORM\Association;
 use Cake\ORM\Behavior;
 use Cake\ORM\Query\SelectQuery;
+use Cake\ORM\Table;
+use LogicException;
 
 /**
  * Layer 1 of ADR-0005: restricts a table to the developments the acting user may reach, and fails closed.
@@ -24,9 +26,18 @@ use Cake\ORM\Query\SelectQuery;
  *   joins them to an allowed development. `throughKey` names the link table column that points back (default
  *   `<field of the table>`: `person_id`), and `field` is read in the link table.
  *
- * Contained (association) queries do not receive the parent's options. They inherit the parent's scope only when this
- * table is joined from a scoped table through a composite `(development_id, x_id)` foreign key, which cannot leave the
- * development by construction. Through-mode tables and every other contained query need an explicit scope.
+ * Contained queries never receive the parent's options, so nothing is inherited implicitly: a query that is not the
+ * primary one needs an explicit `developmentScope` or it throws. The parent supplies it. When a scoped table runs a
+ * query with a contain() it hands its scope, as that explicit option, to every contained association whose foreign
+ * key links the two development columns (`development_id` to `development_id`, or `id` to `development_id` for a
+ * development and its children) and whose target is a scoped, non-through table. Such an association cannot leave
+ * the development by construction, and the target is still filtered by the scope on its own column. Anything else
+ * (plain foreign keys, through-mode tables, matching() and joinWith(), unscoped parents) needs an explicit scope in
+ * its query builder. An explicit scope on a contained query is kept but narrowed to the parent's: never widened.
+ *
+ * Through-mode tables (people) are scoped by reads only. They have no development column to guard, so writes to them
+ * are not guarded here: they are created and changed by their own paths, which must read the entity under a scope
+ * first, and that read is what the scope enforces.
  */
 class DevelopmentScopedBehavior extends Behavior
 {
@@ -51,12 +62,10 @@ class DevelopmentScopedBehavior extends Behavior
     {
         $scope = $options['developmentScope'] ?? ($primary ? DevelopmentScopeStack::current() : null);
         if (!$scope instanceof DevelopmentScope) {
-            if ($primary || !$this->inheritsScope()) {
-                throw new MissingDevelopmentScopeException($this->table()->getAlias());
-            }
-
-            return;
+            throw new MissingDevelopmentScopeException($this->table()->getAlias());
         }
+
+        $this->propagateScope($query, $scope);
 
         if ($scope->isAll()) {
             return;
@@ -84,36 +93,115 @@ class DevelopmentScopedBehavior extends Behavior
         }
 
         $key = (string)($this->getConfig('throughKey') ?? 'person_id');
+        $primaryKey = $table->getPrimaryKey();
+        if (!is_string($primaryKey)) {
+            throw new LogicException(sprintf(
+                'Table `%s` is scoped through `%s`, which needs a single-column primary key.',
+                $table->getAlias(),
+                (string)$through,
+            ));
+        }
         $links = $table->getConnection()->selectQuery([$key], (string)$through)->where([$field . ' IN' => $ids]);
 
-        return [$table->getAlias() . '.' . (string)$table->getPrimaryKey() . ' IN' => $links];
+        return [$table->getAlias() . '.' . $primaryKey . ' IN' => $links];
     }
 
     /**
-     * Whether a contained query on this table may skip the filter: it is not through-mode and it is joined from a
-     * scoped table through a composite foreign key that includes the development column.
+     * Hand the scope, explicitly, to the contained associations that may receive it (see the class docblock).
      *
-     * @return bool
+     * @param \Cake\ORM\Query\SelectQuery<\Cake\Datasource\EntityInterface|array> $query Query.
+     * @param \App\Authorization\DevelopmentScope $scope Scope of this query.
+     * @return void
      */
-    private function inheritsScope(): bool
+    private function propagateScope(SelectQuery $query, DevelopmentScope $scope): void
     {
         if ($this->getConfig('through') !== null) {
+            return;
+        }
+
+        $paths = [];
+        $this->collectLinked($this->table(), $query->getContain(), '', $paths);
+        foreach ($paths as $path) {
+            $query->contain($path, function (SelectQuery $contained) use ($scope): SelectQuery {
+                $own = $contained->getOptions()['developmentScope'] ?? null;
+
+                return $contained->applyOptions([
+                    'developmentScope' => $own instanceof DevelopmentScope ? $own->intersect($scope) : $scope,
+                ]);
+            });
+        }
+    }
+
+    /**
+     * @param \Cake\ORM\Table $source Table the containments hang from.
+     * @param array<array-key, mixed> $contain Containments of `$source`.
+     * @param string $prefix Dotted path of `$source`, with a trailing dot.
+     * @param list<string> $paths Collected dotted paths of the associations that receive the scope.
+     * @return void
+     */
+    private function collectLinked(Table $source, array $contain, string $prefix, array &$paths): void
+    {
+        foreach ($contain as $name => $options) {
+            if (!is_string($name) || !is_array($options) || !$source->hasAssociation($name)) {
+                continue;
+            }
+
+            $association = $source->getAssociation($name);
+            if (!$this->linksDevelopment($source, $association)) {
+                continue;
+            }
+
+            $paths[] = $prefix . $name;
+            $this->collectLinked($association->getTarget(), $options, $prefix . $name . '.', $paths);
+        }
+    }
+
+    /**
+     * Whether the association equates the development column of its source with that of its target, and both tables
+     * are scoped by a development column of their own (not through a link table).
+     *
+     * @param \Cake\ORM\Table $source Source table.
+     * @param \Cake\ORM\Association $association Association to check.
+     * @return bool
+     */
+    private function linksDevelopment(Table $source, Association $association): bool
+    {
+        $target = $association->getTarget();
+        $from = $this->developmentColumn($source);
+        $to = $this->developmentColumn($target);
+        $foreignKey = $association->getForeignKey();
+        if ($from === null || $to === null || !is_array($foreignKey)) {
             return false;
         }
 
-        $field = (string)$this->getConfig('field');
-        foreach ($this->table()->associations() as $association) {
-            $foreignKey = $association->getForeignKey();
-            if (
-                $association->type() === Association::MANY_TO_ONE
-                && $association->getTarget()->hasBehavior('DevelopmentScoped')
-                && is_array($foreignKey)
-                && in_array($field, $foreignKey, true)
-            ) {
+        $bindingKey = (array)$association->getBindingKey();
+        [$sourceColumns, $targetColumns] = match ($association->type()) {
+            Association::MANY_TO_ONE => [$foreignKey, $bindingKey],
+            Association::ONE_TO_ONE, Association::ONE_TO_MANY => [$bindingKey, $foreignKey],
+            default => [[], []],
+        };
+
+        foreach ($sourceColumns as $index => $column) {
+            if ($column === $from && ($targetColumns[$index] ?? null) === $to) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * @param \Cake\ORM\Table $table Table.
+     * @return string|null The development column of a scoped, non-through table; null otherwise.
+     */
+    private function developmentColumn(Table $table): ?string
+    {
+        if (!$table->hasBehavior('DevelopmentScoped')) {
+            return null;
+        }
+
+        $behavior = $table->getBehavior('DevelopmentScoped');
+
+        return $behavior->getConfig('through') === null ? (string)$behavior->getConfig('field') : null;
     }
 }
