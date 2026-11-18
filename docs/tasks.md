@@ -194,3 +194,5 @@
 | REBUILD-003-F7 | Slice 4 review notes: lock the actor's own manage assignment during grant/end (race with concurrent revocation); consider rejecting backdated `starts_on` for non-super actors; optional guard against removing the last administrator of a development. | TODO | build | Claude | 2026-11-18 |
 
 | REBUILD-003-F4 | Done 2026-11-18: business clock in central Mexico time for every "today" check, PHP and SQL. | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F1 | Done 2026-11-18: hidden password input on Windows (PowerShell secure read) and Unix (stty), failing closed. Manual console check pending. | DONE | build | Claude | 2026-11-18 |

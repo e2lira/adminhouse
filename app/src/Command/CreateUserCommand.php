@@ -4,12 +4,15 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Clock\BusinessClock;
+use App\Console\HiddenInput;
+use App\Console\HiddenInputUnavailable;
 use App\Model\Table\RolesTable;
 use Authentication\PasswordHasher\DefaultPasswordHasher;
 use Cake\Command\Command;
 use Cake\Console\Arguments;
 use Cake\Console\ConsoleIo;
 use Cake\Console\ConsoleOptionParser;
+use Cake\Core\Configure;
 use Cake\I18n\DateTime;
 use Cake\ORM\Locator\LocatorAwareTrait;
 use Throwable;
@@ -79,15 +82,19 @@ class CreateUserCommand extends Command
             return $this->fail($io, sprintf('A user named "%s" already exists.', $username));
         }
 
-        $password = $this->askSecret($io, 'Password');
-        if (mb_strlen($password) < self::MIN_PASSWORD_LENGTH) {
-            return $this->fail(
-                $io,
-                sprintf('The password must have at least %d characters.', self::MIN_PASSWORD_LENGTH),
-            );
-        }
-        if ($password !== $this->askSecret($io, 'Repeat the password')) {
-            return $this->fail($io, 'The passwords do not match.');
+        try {
+            $password = $this->askSecret($io, 'Password');
+            if (mb_strlen($password) < self::MIN_PASSWORD_LENGTH) {
+                return $this->fail(
+                    $io,
+                    sprintf('The password must have at least %d characters.', self::MIN_PASSWORD_LENGTH),
+                );
+            }
+            if ($password !== $this->askSecret($io, 'Repeat the password')) {
+                return $this->fail($io, 'The passwords do not match.');
+            }
+        } catch (HiddenInputUnavailable $e) {
+            return $this->fail($io, 'This terminal cannot hide the password; nothing was created. ' . $e->getMessage());
         }
 
         try {
@@ -135,25 +142,24 @@ class CreateUserCommand extends Command
     }
 
     /**
-     * Read a secret without echoing it when the terminal allows it.
+     * Read a secret without echoing it (REBUILD-003-F1). On a terminal that cannot hide input this throws
+     * HiddenInputUnavailable rather than echoing. `Console.hideSecrets` is false only in the test suite,
+     * whose stub input never reaches a screen.
      */
     private function askSecret(ConsoleIo $io, string $prompt): string
     {
-        $canHideInput = DIRECTORY_SEPARATOR === '/' && function_exists('stream_isatty') && stream_isatty(STDIN);
-        if ($canHideInput) {
-            shell_exec('stty -echo');
-        }
-
-        try {
-            $value = (string)$io->ask($prompt);
-        } finally {
-            if ($canHideInput) {
-                shell_exec('stty echo');
+        if (Configure::read('Console.hideSecrets', true)) {
+            $hidden = new HiddenInput();
+            if ($hidden->isTerminal()) {
+                $io->out($prompt . ': ', 0);
+                $value = (string)$hidden->read();
                 $io->out('');
+
+                return $value;
             }
         }
 
-        return $value;
+        return (string)$io->ask($prompt);
     }
 
     /**
