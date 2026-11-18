@@ -202,3 +202,5 @@
 | RLS-SEC-001 | Done 2026-11-18: RLS layer implemented, dedicated security review done, policy suite passing against real PostgreSQL. Condition of ADR-0005 met for the tables that exist; each new module must add its tables with `RowLevelSecurity` helpers and policy tests. | DONE | build | Claude | 2026-11-18 |
 
 | RLS-002 | Future: separate login role for jobs (removes the job-context residual); webhook context and `record_gateway_payment`; `audit_log` in its own transaction; occupancies and guard projection policies. | TODO | build | Claude | 2026-11-18 |
+
+| CI-001 | Fix red CI after PR #1: test bootstrap replaces the CI placeholder TOTP key; adopt develop -> qa -> main promotion flow. | DONE | build | Claude | 2026-11-18 |
