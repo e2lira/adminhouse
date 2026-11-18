@@ -1,0 +1,49 @@
+schema: spec-driven
+
+context: |
+  Project: adminhouse (kualitet.mx). Active codebase is app/ (CakePHP 5.4.4, PHP 8.3, PostgreSQL 18).
+  The repository root holds a legacy CakePHP 3.9 app: functional reference only, never modify it.
+  Multi-tenancy via PostgreSQL row-level security. Roles: kualitet_app (runtime), kualitet_owner (migrations), kualitet_definer.
+  Auth: cakephp/authentication + cakephp/authorization, TOTP second factor (spomky-labs/otphp).
+  Branch flow: work branch -> develop -> qa -> main (AGENTS.md). PRs follow .github/pull_request_template.md.
+  Docs updated each step: docs/progress.md, docs/tasks.md, docs/change-log.md, docs/test-results.md (CRLF endings).
+  Artifacts in English.
+
+strict_tdd: true
+
+testing:
+  strict_tdd: true
+  runner:
+    command: "cd app && vendor/bin/phpunit"
+    framework: "PHPUnit 11/12/13 (CakePHP TestCase)"
+    notes: "Real PostgreSQL test DB. NEVER run two phpunit processes at once (deadlocks on shared test DB). PHP: export PATH=/c/php-8.3:$PATH"
+  layers:
+    unit: { available: true, tool: "phpunit" }
+    integration: { available: true, tool: "phpunit + CakePHP IntegrationTestCase + real PostgreSQL" }
+    e2e: { available: false, tool: null }
+  coverage: { available: false, command: null }
+  quality:
+    linter: { available: true, command: "cd app && vendor/bin/phpcs" }
+    formatter: { available: true, command: "cd app && vendor/bin/phpcbf" }
+    type_checker: { available: false, command: null, notes: "phpstan.neon and psalm.xml exist but neither is in require-dev" }
+  migrations: "cd app && bin/cake migrations migrate -c migrations"
+  ci: ".github/workflows/app-ci.yml (phpunit + phpcs on postgres:18)"
+
+rules:
+  proposal:
+    - Keep scope within app/; never touch the legacy CakePHP 3.9 code at the repository root.
+  specs:
+    - Use Given/When/Then scenarios; existing functional specs also live in docs/specs.
+  design:
+    - New tables must use App\Database\RowLevelSecurity helpers, with policy tests under app/tests/TestCase/Database/Rls.
+  tasks:
+    - Tests first (Strict TDD). Include the docs updates (progress, tasks, change-log, test-results).
+    - Include the Review Workload Forecast (400-line budget).
+  apply:
+    - Write the failing test first, then the code. Never run two phpunit processes at once.
+    - Run vendor/bin/phpcs before finishing.
+    - Do not commit to develop, qa or main; do not edit docs/*.md with LF endings (use CRLF).
+  verify:
+    - Run cd app && vendor/bin/phpunit and vendor/bin/phpcs; record evidence in docs/test-results.md.
+  archive:
+    - Record the change in docs/change-log.md.
