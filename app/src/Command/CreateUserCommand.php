@@ -3,13 +3,13 @@ declare(strict_types=1);
 
 namespace App\Command;
 
+use App\Clock\BusinessClock;
 use App\Model\Table\RolesTable;
 use Authentication\PasswordHasher\DefaultPasswordHasher;
 use Cake\Command\Command;
 use Cake\Console\Arguments;
 use Cake\Console\ConsoleIo;
 use Cake\Console\ConsoleOptionParser;
-use Cake\I18n\Date;
 use Cake\I18n\DateTime;
 use Cake\ORM\Locator\LocatorAwareTrait;
 use Throwable;
@@ -129,7 +129,7 @@ class CreateUserCommand extends Command
             'user_id' => $userId,
             'role_id' => $role->id,
             'development_id' => null,
-            'starts_on' => Date::today(),
+            'starts_on' => (new BusinessClock())->today(),
             'read_only' => false,
         ]));
     }

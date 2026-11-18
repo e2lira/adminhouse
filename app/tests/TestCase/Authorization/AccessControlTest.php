@@ -4,7 +4,9 @@ declare(strict_types=1);
 namespace App\Test\TestCase\Authorization;
 
 use App\Authorization\AccessControl;
+use App\Clock\BusinessClock;
 use App\Test\Support\DatabaseTestCase;
+use Cake\Chronos\Chronos;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -185,5 +187,34 @@ class AccessControlTest extends DatabaseTestCase
         )->fetch()[0];
 
         $this->assertSame(0, (int)$count);
+    }
+
+    public function testAssignmentEndingTodayGrantsInTheEveningInMexicoAndStopsAfterLocalMidnight(): void
+    {
+        $userId = $this->createUser('ann');
+        $dev = $this->createDevelopment('A');
+        $this->assignRoleOn($userId, 'administrator', $dev, '2026-11-01', '2026-11-17');
+
+        // 2026-11-17 20:00 in Mexico City: the last day of the assignment, it still grants.
+        $evening = new AccessControl(null, new BusinessClock(null, new Chronos('2026-11-18T02:00:00Z', 'UTC')));
+        $this->assertTrue($evening->allowedFor($userId, 'developments.view')->allows($dev));
+
+        // 2026-11-18 00:30 in Mexico City: the assignment has ended.
+        $night = new AccessControl(null, new BusinessClock(null, new Chronos('2026-11-18T06:30:00Z', 'UTC')));
+        $this->assertFalse($night->allowedFor($userId, 'developments.view')->allows($dev));
+    }
+
+    public function testAssignmentStartingOnTheBusinessDayDoesNotGrantBeforeLocalMidnight(): void
+    {
+        $userId = $this->createUser('ann');
+        $dev = $this->createDevelopment('A');
+        $this->assignRoleOn($userId, 'administrator', $dev, '2026-11-18');
+
+        // 2026-11-17 20:00 in Mexico City: UTC is already on the 18th, the business day is not.
+        $evening = new AccessControl(null, new BusinessClock(null, new Chronos('2026-11-18T02:00:00Z', 'UTC')));
+        $this->assertFalse($evening->allowedFor($userId, 'developments.view')->allows($dev));
+
+        $night = new AccessControl(null, new BusinessClock(null, new Chronos('2026-11-18T06:30:00Z', 'UTC')));
+        $this->assertTrue($night->allowedFor($userId, 'developments.view')->allows($dev));
     }
 }

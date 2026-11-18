@@ -27,6 +27,13 @@ return [
      */
 
     /*
+     * Business time zone: the calendar day used for role-assignment windows and the second-factor requirement.
+     * Read in config/app.php from BUSINESS_TIMEZONE (default America/Mexico_City); timestamps stay in UTC.
+     * The SQL function business_today() names the same zone, so changing BUSINESS_TIMEZONE requires a migration
+     * that redefines it (tests/TestCase/Database/BusinessTodayTest.php fails until it does).
+     */
+
+    /*
      * Security and encryption configuration
      *
      * - salt - A random string used in security hashing methods.

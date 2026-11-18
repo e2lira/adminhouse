@@ -5,6 +5,7 @@ namespace App\Test\TestCase\Command;
 
 use App\Test\Support\DatabaseTestCase;
 use Authentication\PasswordHasher\DefaultPasswordHasher;
+use Cake\Chronos\Chronos;
 use Cake\Console\TestSuite\ConsoleIntegrationTestTrait;
 
 class CreateUserCommandTest extends DatabaseTestCase
@@ -97,5 +98,23 @@ class CreateUserCommandTest extends DatabaseTestCase
         $this->assertOutputNotContains(self::PASSWORD);
         $this->assertStringNotContainsString(self::PASSWORD, implode("
 ", $this->_err->messages()));
+    }
+
+    public function testSuperAdministratorStartsOnTheBusinessDay(): void
+    {
+        $previous = Chronos::getTestNow();
+        // 2026-11-17 20:00 in Mexico City, already the 18th in UTC.
+        Chronos::setTestNow(new Chronos('2026-11-18T02:00:00Z', 'UTC'));
+        try {
+            $this->exec('create_user root --super-administrator', [self::PASSWORD, self::PASSWORD]);
+        } finally {
+            Chronos::setTestNow($previous);
+        }
+
+        $this->assertExitSuccess();
+        $this->assertSame(
+            '2026-11-17',
+            (string)$this->db()->execute('SELECT starts_on FROM role_assignments')->fetch()[0],
+        );
     }
 }

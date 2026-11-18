@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Test\Support;
 
+use App\Clock\BusinessClock;
 use Authentication\PasswordHasher\DefaultPasswordHasher;
 use Cake\Database\Connection;
 use Cake\Datasource\ConnectionManager;
@@ -96,7 +97,19 @@ abstract class DatabaseTestCase extends TestCase
     }
 
     /**
-     * Give a user a role. Dates are offsets in days from today.
+     * A calendar date relative to today in the business time zone, so tests never flake between 18:00 and 24:00
+     * local time, when UTC is already on the next day.
+     *
+     * @param int $offset Days from today (negative for the past).
+     * @return string `Y-m-d`.
+     */
+    protected function businessDay(int $offset = 0): string
+    {
+        return (new BusinessClock())->today()->addDays($offset)->format('Y-m-d');
+    }
+
+    /**
+     * Give a user a role. Dates are offsets in days from today in the business time zone.
      *
      * @param int $userId User id.
      * @param string $roleCode Role code.
@@ -114,22 +127,40 @@ abstract class DatabaseTestCase extends TestCase
         ?int $endsInDays = null,
         bool $readOnly = false,
     ): void {
-        $day = static fn(?int $offset): ?string => $offset === null
-            ? null
-            : date('Y-m-d', strtotime(sprintf('%+d days', $offset)));
+        $this->assignRoleOn(
+            $userId,
+            $roleCode,
+            $developmentId,
+            $this->businessDay($startsInDays),
+            $endsInDays === null ? null : $this->businessDay($endsInDays),
+            $readOnly,
+        );
+    }
 
+    /**
+     * Give a user a role with explicit dates.
+     *
+     * @param int $userId User id.
+     * @param string $roleCode Role code.
+     * @param int|null $developmentId Development id; null only for super_administrator.
+     * @param string $startsOn `Y-m-d`.
+     * @param string|null $endsOn `Y-m-d`, or null for an open assignment.
+     * @param bool $readOnly Whether the assignment is read-only.
+     * @return void
+     */
+    protected function assignRoleOn(
+        int $userId,
+        string $roleCode,
+        ?int $developmentId,
+        string $startsOn,
+        ?string $endsOn = null,
+        bool $readOnly = false,
+    ): void {
         $this->db()->execute(
             'INSERT INTO role_assignments
                 (user_id, role_id, development_id, starts_on, ends_on, read_only, created, modified)
              VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())',
-            [
-                $userId,
-                $this->roleId($roleCode),
-                $developmentId,
-                $day($startsInDays),
-                $day($endsInDays),
-                $readOnly,
-            ],
+            [$userId, $this->roleId($roleCode), $developmentId, $startsOn, $endsOn, $readOnly],
             ['integer', 'integer', 'integer', 'string', 'string', 'boolean'],
         );
     }

@@ -3,10 +3,10 @@ declare(strict_types=1);
 
 namespace App\Authorization;
 
+use App\Clock\BusinessClock;
 use Cake\Database\Connection;
 use Cake\Database\Exception\DatabaseException;
 use Cake\Datasource\ConnectionManager;
-use Cake\I18n\Date;
 use DateTimeImmutable;
 use PDOException;
 use Throwable;
@@ -29,7 +29,7 @@ use Throwable;
  * - ending sets `ends_on` and never deletes: history is kept. Every grant and end writes an append-only row in
  *   `role_assignment_events`, in the same transaction as the change.
  *
- * "Today" is `Date::today()`, as in AccessControl (time zone handling is tracked as REBUILD-003-F4).
+ * "Today" is the business day of BusinessClock, as in AccessControl.
  */
 class RoleAssignmentManager
 {
@@ -41,9 +41,13 @@ class RoleAssignmentManager
     /**
      * @param \Cake\Database\Connection|null $connection Connection; defaults to `default`.
      * @param \App\Authorization\AccessControl|null $access Scope resolver; defaults to one on the same connection.
+     * @param \App\Clock\BusinessClock|null $clock Source of "today"; defaults to the business clock.
      */
-    public function __construct(private ?Connection $connection = null, private ?AccessControl $access = null)
-    {
+    public function __construct(
+        private ?Connection $connection = null,
+        private ?AccessControl $access = null,
+        private ?BusinessClock $clock = null,
+    ) {
     }
 
     /**
@@ -324,7 +328,7 @@ class RoleAssignmentManager
      */
     private function endDateFor(string $startsOn, ?string $endsOn): ?string
     {
-        $yesterday = Date::today()->subDays(1)->format(self::DATE_FORMAT);
+        $yesterday = $this->clock()->today()->subDays(1)->format(self::DATE_FORMAT);
         $newEnd = max($yesterday, $startsOn);
 
         return $endsOn !== null && $endsOn <= $newEnd ? null : $newEnd;
@@ -433,7 +437,7 @@ class RoleAssignmentManager
      */
     private function scopeFor(int $actorId): DevelopmentScope
     {
-        $access = $this->access ??= new AccessControl($this->connection);
+        $access = $this->access ??= new AccessControl($this->connection, $this->clock());
 
         return $access->allowedFor($actorId, self::PERMISSION);
     }
@@ -524,11 +528,19 @@ class RoleAssignmentManager
     }
 
     /**
+     * @return \App\Clock\BusinessClock
+     */
+    private function clock(): BusinessClock
+    {
+        return $this->clock ??= new BusinessClock();
+    }
+
+    /**
      * @return string Today as `Y-m-d`.
      */
     private function today(): string
     {
-        return Date::today()->format(self::DATE_FORMAT);
+        return $this->clock()->today()->format(self::DATE_FORMAT);
     }
 
     /**

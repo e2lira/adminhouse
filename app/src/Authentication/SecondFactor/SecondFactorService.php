@@ -3,9 +3,9 @@ declare(strict_types=1);
 
 namespace App\Authentication\SecondFactor;
 
+use App\Clock\BusinessClock;
 use Cake\Database\Connection;
 use Cake\Datasource\ConnectionManager;
-use Cake\I18n\Date;
 use LogicException;
 
 /**
@@ -31,11 +31,13 @@ final class SecondFactorService
      * @param \App\Authentication\SecondFactor\TotpService|null $totp TOTP calculator.
      * @param \App\Authentication\SecondFactor\SecretVault|null $vault Secret vault; created on first use so
      *  that asking who needs a second factor does not require the encryption key.
+     * @param \App\Clock\BusinessClock|null $clock Source of "today"; defaults to the business clock.
      */
     public function __construct(
         private ?Connection $connection = null,
         private ?TotpService $totp = null,
         ?SecretVault $vault = null,
+        private ?BusinessClock $clock = null,
     ) {
         $this->vault = $vault;
     }
@@ -53,7 +55,7 @@ final class SecondFactorService
             return true;
         }
 
-        $today = Date::today()->format('Y-m-d');
+        $today = ($this->clock ??= new BusinessClock())->today()->format('Y-m-d');
 
         return $this->connection()->execute(
             'SELECT 1

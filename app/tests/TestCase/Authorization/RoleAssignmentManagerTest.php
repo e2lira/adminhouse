@@ -7,9 +7,9 @@ use App\Authorization\AccessControl;
 use App\Authorization\RoleAssignmentException;
 use App\Authorization\RoleAssignmentManager;
 use App\Authorization\RoleAssignmentNotAllowed;
+use App\Clock\BusinessClock;
 use App\Test\Support\DatabaseTestCase;
 use Cake\Chronos\Chronos;
-use Cake\I18n\Date;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Log\AbstractLogger;
 use Stringable;
@@ -53,7 +53,7 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
 
     private function today(): string
     {
-        return Date::today()->format('Y-m-d');
+        return $this->businessDay();
     }
 
     private function grantAs(
@@ -109,11 +109,11 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
 
     public function testGrantCanBeReadOnlyAndEndDated(): void
     {
-        $id = $this->grantAs($this->adminA, $this->devA, 'bob', 'resident', null, date('Y-m-d', strtotime('+10 days')), true);
+        $id = $this->grantAs($this->adminA, $this->devA, 'bob', 'resident', null, $this->businessDay(10), true);
 
         $row = $this->db()->execute('SELECT * FROM role_assignments WHERE id = ?', [$id])->fetch('assoc');
         $this->assertTrue((bool)$row['read_only']);
-        $this->assertSame(date('Y-m-d', strtotime('+10 days')), (string)$row['ends_on']);
+        $this->assertSame($this->businessDay(10), (string)$row['ends_on']);
     }
 
     public function testSuperAdministratorGrantsInAnyDevelopment(): void
@@ -297,21 +297,21 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
 
     public function testEndingKeepsTheRowAndRemovesAccessImmediately(): void
     {
-        $id = $this->grantAs($this->root, $this->devA, 'bob', 'accountant', date('Y-m-d', strtotime('-5 days')));
+        $id = $this->grantAs($this->root, $this->devA, 'bob', 'accountant', $this->businessDay(-5));
         $access = new AccessControl();
         $this->assertTrue($access->allowedFor($this->bob, 'payments.create')->allows($this->devA));
 
         $this->manager()->end($this->adminA, $this->devA, $id);
 
         $row = $this->db()->execute('SELECT * FROM role_assignments WHERE id = ?', [$id])->fetch('assoc');
-        $this->assertSame(date('Y-m-d', strtotime('-1 day')), (string)$row['ends_on']);
+        $this->assertSame($this->businessDay(-1), (string)$row['ends_on']);
         $this->assertFalse($access->allowedFor($this->bob, 'payments.create')->allows($this->devA));
         $this->assertSame(2 + 1, $this->rows('role_assignments'));
     }
 
     public function testEndingWritesAnAuditEventWithBeforeAndAfter(): void
     {
-        $id = $this->grantAs($this->adminA, $this->devA, 'bob', 'accountant', date('Y-m-d', strtotime('-5 days')));
+        $id = $this->grantAs($this->adminA, $this->devA, 'bob', 'accountant', $this->businessDay(-5));
 
         $this->manager()->end($this->adminA, $this->devA, $id);
 
@@ -321,7 +321,7 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
         $this->assertSame($id, (int)$events[1]['role_assignment_id']);
         $this->assertNull(json_decode((string)$events[1]['before_snapshot'], true)['ends_on']);
         $this->assertSame(
-            date('Y-m-d', strtotime('-1 day')),
+            $this->businessDay(-1),
             json_decode((string)$events[1]['after_snapshot'], true)['ends_on'],
         );
     }
@@ -340,7 +340,7 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
 
     public function testEndingFutureAssignmentKeepsItNeverActiveBeforeItsStartDay(): void
     {
-        $start = date('Y-m-d', strtotime('+3 days'));
+        $start = $this->businessDay(3);
         $id = $this->grantAs($this->adminA, $this->devA, 'bob', 'accountant', $start);
 
         $this->manager()->end($this->adminA, $this->devA, $id);
@@ -353,7 +353,7 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
 
     public function testEndedAssignmentCannotBeEndedAgain(): void
     {
-        $id = $this->grantAs($this->adminA, $this->devA, 'bob', 'accountant', date('Y-m-d', strtotime('-5 days')));
+        $id = $this->grantAs($this->adminA, $this->devA, 'bob', 'accountant', $this->businessDay(-5));
         $this->manager()->end($this->adminA, $this->devA, $id);
 
         $this->assertRejected(
@@ -464,15 +464,15 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
         foreach (['u1', 'u2', 'u3', 'u4'] as $name) {
             $this->createUser($name);
         }
-        $this->grantAs($this->root, $this->devA, 'u1', 'accountant', date('Y-m-d', strtotime('-20 days')));
-        $this->grantAs($this->root, $this->devA, 'u2', 'supervisor', date('Y-m-d', strtotime('+5 days')));
+        $this->grantAs($this->root, $this->devA, 'u1', 'accountant', $this->businessDay(-20));
+        $this->grantAs($this->root, $this->devA, 'u2', 'supervisor', $this->businessDay(5));
         $this->grantAs(
             $this->root,
             $this->devA,
             'u3',
             'resident',
-            date('Y-m-d', strtotime('-20 days')),
-            date('Y-m-d', strtotime('-2 days')),
+            $this->businessDay(-20),
+            $this->businessDay(-2),
             true,
         );
         $this->grantAs($this->root, $this->devB, 'u4', 'guard');
@@ -533,5 +533,54 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
             RoleAssignmentException::DUPLICATE,
             RoleAssignmentException::fromDatabaseError('23505', 'duplicate key')->reason,
         );
+    }
+
+    private function managerAt(string $utcInstant): RoleAssignmentManager
+    {
+        return new RoleAssignmentManager(null, null, new BusinessClock(null, new Chronos($utcInstant, 'UTC')));
+    }
+
+    public function testEndingComputesYesterdayInTheBusinessZone(): void
+    {
+        $id = $this->grantAs($this->adminA, $this->devA, 'bob', 'accountant', '2026-11-01');
+
+        // 2026-11-17 20:00 in Mexico City: yesterday is the 16th, although UTC is already on the 18th.
+        $this->managerAt('2026-11-18T02:00:00Z')->end($this->adminA, $this->devA, $id);
+
+        $this->assertSame(
+            '2026-11-16',
+            (string)$this->db()->execute('SELECT ends_on FROM role_assignments WHERE id = ?', [$id])->fetch()[0],
+        );
+    }
+
+    public function testGrantWithoutStartDateStartsOnTheBusinessDay(): void
+    {
+        $id = $this->managerAt('2026-11-18T02:00:00Z')->grant(
+            $this->adminA,
+            $this->devA,
+            'bob',
+            $this->roleId('accountant'),
+            null,
+            null,
+            false,
+        );
+
+        $this->assertSame(
+            '2026-11-17',
+            (string)$this->db()->execute('SELECT starts_on FROM role_assignments WHERE id = ?', [$id])->fetch()[0],
+        );
+    }
+
+    public function testListedStateUsesTheBusinessDay(): void
+    {
+        $this->grantAs($this->adminA, $this->devA, 'bob', 'accountant', '2026-11-01', '2026-11-17');
+
+        $states = static fn(array $rows): array => array_column($rows, 'state', 'username');
+
+        $evening = $this->managerAt('2026-11-18T02:00:00Z')->listFor($this->adminA, $this->devA);
+        $this->assertSame('current', $states($evening)['bob']);
+
+        $night = $this->managerAt('2026-11-18T06:30:00Z')->listFor($this->adminA, $this->devA);
+        $this->assertSame('ended', $states($night)['bob']);
     }
 }

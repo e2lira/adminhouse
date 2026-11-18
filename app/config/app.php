@@ -58,6 +58,9 @@ return [
         'encoding' => env('APP_ENCODING', 'UTF-8'),
         'defaultLocale' => env('APP_DEFAULT_LOCALE', 'en_US'),
         'defaultTimezone' => env('APP_DEFAULT_TIMEZONE', 'UTC'),
+        // Calendar zone for business rules ("today" of a role-assignment window). Timestamps stay stored in UTC.
+        // The SQL function business_today() names the same zone: changing this needs a migration.
+        'businessTimezone' => env('BUSINESS_TIMEZONE', 'America/Mexico_City'),
         'base' => false,
         'dir' => 'src',
         'webroot' => 'webroot',
