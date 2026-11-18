@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Test\TestCase\Model\Behavior;
 
 use App\Authorization\DevelopmentScope;
+use App\Authorization\DevelopmentScopeStack;
 use App\Model\Exception\MissingDevelopmentScopeException;
 use App\Test\Support\Scoped\ScopedSchema;
 use App\Test\Support\ScopedTableTestCase;
@@ -246,6 +247,61 @@ class DevelopmentScopedBehaviorReadTest extends ScopedTableTestCase
             'ScopedTags' => ['queryBuilder' => fn($q) => $q->applyOptions(['developmentScope' => DevelopmentScope::only([2])])],
         ])->firstOrFail();
         $this->assertSame([], $found->tags);
+    }
+
+    public function testAStringForeignKeyFromTheDevelopmentColumnLinksTheChildren(): void
+    {
+        $this->appDb()->execute("INSERT INTO scoped_realms (name) VALUES ('r1'), ('r2')");
+        $this->insertItem(1, 'a1');
+        $this->insertItem(2, 'b1');
+
+        $found = $this->realms->find('all', developmentScope: DevelopmentScope::only([1]))
+            ->contain('ScopedItems')
+            ->all();
+
+        $this->assertCount(1, $found);
+        $this->assertSame(['a1'], collection($found->first()->items)->extract('name')->toList());
+    }
+
+    public function testAnExplicitScopeNeverWidensTheRunningOperationScope(): void
+    {
+        $this->seedItems();
+
+        $names = DevelopmentScopeStack::run(
+            DevelopmentScope::only([1]),
+            fn() => $this->names($this->items->find('all', developmentScope: DevelopmentScope::all())),
+        );
+
+        $this->assertSame(['a1', 'a2'], $names);
+    }
+
+    public function testAMatchingBuilderNeverWidensTheRunningOperationScope(): void
+    {
+        $item = $this->insertItem(1, 'a1');
+        $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (1, $item, 'n1')");
+        $this->appDb()->execute("INSERT INTO scoped_notes (development_id, item_id, body) VALUES (2, $item, 'n2')");
+        $this->appDb()->execute('INSERT INTO scoped_holders (item_id, note_id) VALUES (?, 1), (?, 2)', [$item, $item]);
+
+        $count = DevelopmentScopeStack::run(
+            DevelopmentScope::only([1]),
+            fn() => $this->holders->find()
+                ->matching('ScopedNotes', fn($q) => $q->applyOptions(['developmentScope' => DevelopmentScope::all()]))
+                ->count(),
+        );
+
+        $this->assertSame(1, $count);
+    }
+
+    public function testAnUnscopedParentTrustsTheExplicitScopeOfItsContainBuilder(): void
+    {
+        $item = $this->insertItem(1, 'a1');
+        $this->appDb()->execute("INSERT INTO scoped_holders (item_id) VALUES ($item)");
+
+        $found = $this->holders->find()->contain([
+            'ScopedItems' => ['queryBuilder' => fn($q) => $q->applyOptions(['developmentScope' => DevelopmentScope::all()])],
+        ])->firstOrFail();
+
+        $this->assertSame('a1', $found->item->name);
     }
 
     public function testAThroughTableWithACompositePrimaryKeyIsRejected(): void

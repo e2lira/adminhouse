@@ -20,5 +20,11 @@ class RealmsTable extends Table
 
         $this->setTable(ScopedSchema::qualify('scoped_realms'));
         $this->addBehavior('DevelopmentScoped', ['field' => 'id']);
+        // Like developments and units: the foreign key is the plain string `development_id`, bound to `id`.
+        $this->hasMany('ScopedItems', [
+            'className' => ItemsTable::class,
+            'foreignKey' => 'development_id',
+            'propertyName' => 'items',
+        ]);
     }
 }

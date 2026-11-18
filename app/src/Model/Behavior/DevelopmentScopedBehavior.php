@@ -34,6 +34,9 @@ use LogicException;
  * the development by construction, and the target is still filtered by the scope on its own column. Anything else
  * (plain foreign keys, through-mode tables, matching() and joinWith(), unscoped parents) needs an explicit scope in
  * its query builder. An explicit scope on a contained query is kept but narrowed to the parent's: never widened.
+ * Likewise an explicit scope never widens the operation scope that is running (DevelopmentScopeStack). An unscoped
+ * parent's builder is trusted to pass its own scope: that is server code, and the all-development scope is only built
+ * in src/Authorization (architecture test).
  *
  * Through-mode tables (people) are scoped by reads only. They have no development column to guard, so writes to them
  * are not guarded here: they are created and changed by their own paths, which must read the entity under a scope
@@ -60,7 +63,14 @@ class DevelopmentScopedBehavior extends Behavior
      */
     public function beforeFind(EventInterface $event, SelectQuery $query, ArrayObject $options, bool $primary): void
     {
-        $scope = $options['developmentScope'] ?? ($primary ? DevelopmentScopeStack::current() : null);
+        $explicit = $options['developmentScope'] ?? null;
+        $running = DevelopmentScopeStack::current();
+        if ($explicit instanceof DevelopmentScope) {
+            // An explicit scope may narrow the operation that is running, never widen it.
+            $scope = $running !== null ? $running->intersect($explicit) : $explicit;
+        } else {
+            $scope = $primary ? $running : null;
+        }
         if (!$scope instanceof DevelopmentScope) {
             throw new MissingDevelopmentScopeException($this->table()->getAlias());
         }
@@ -169,8 +179,9 @@ class DevelopmentScopedBehavior extends Behavior
         $target = $association->getTarget();
         $from = $this->developmentColumn($source);
         $to = $this->developmentColumn($target);
-        $foreignKey = $association->getForeignKey();
-        if ($from === null || $to === null || !is_array($foreignKey)) {
+        $key = $association->getForeignKey();
+        $foreignKey = $key === false ? [] : (array)$key;
+        if ($from === null || $to === null || $foreignKey === []) {
             return false;
         }
 
