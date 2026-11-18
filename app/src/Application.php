@@ -19,6 +19,7 @@ namespace App;
 use App\Authentication\ActiveSessionAuthenticator;
 use App\Authentication\ActiveUserIdentifier;
 use App\Authentication\CredentialsIdentifier;
+use App\Authentication\SecondFactorFormAuthenticator;
 use App\Middleware\HostHeaderMiddleware;
 use Authentication\AuthenticationService;
 use Authentication\AuthenticationServiceInterface;
@@ -155,7 +156,7 @@ class Application extends BaseApplication implements
     }
 
     /**
-     * Session-based sign-in with username and password.
+     * Session-based sign-in with username and password, plus TOTP for users who need it.
      *
      * @param \Psr\Http\Message\ServerRequestInterface $request Request.
      * @return \Authentication\AuthenticationServiceInterface
@@ -175,7 +176,9 @@ class Application extends BaseApplication implements
             'identifier' => ActiveUserIdentifier::class,
             'identifierKey' => ActiveUserIdentifier::CREDENTIAL_ID,
         ]);
-        $service->loadAuthenticator('Authentication.Form', [
+        // A correct password is not a sign-in for users who must pass a second factor: this authenticator
+        // withholds the identity and leaves a pending marker instead (see PendingLogin).
+        $service->loadAuthenticator(SecondFactorFormAuthenticator::class, [
             'identifier' => CredentialsIdentifier::class,
             'loginUrl' => $loginUrl,
             'fields' => ['username' => 'username', 'password' => 'password'],

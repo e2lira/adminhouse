@@ -130,3 +130,5 @@
 - [2026-11-17] REBUILD-003 slice 1 verified: identity schema, role catalogue and password sign-in in `app/` (41 tests green). Next: slice 2 (permissions, development scoping, default deny).
 
 - [2026-11-18] REBUILD-003 slice 1 committed (`bd62a64`); slice 2 verified (82 tests green): permissions, development scope, default deny, per-request user reload. Next: confirm the role matrix, commit, then slice 3 (TOTP).
+
+- [2026-11-18] REBUILD-003 slice 3 verified and committed locally: TOTP second factor for super-administrators (150 tests green). Next: slice 4 (role-assignment management screen).

@@ -38,6 +38,16 @@ return [
     ],
 
     /*
+     * Second factor (TOTP). TOTP_ENCRYPTION_KEY must be a random value of at least 32 bytes, for example the
+     * output of: php -r "echo bin2hex(random_bytes(32));"
+     * It encrypts the TOTP secrets at rest and keys the backup code hashes. It is required in production and
+     * must never be committed; losing or changing it invalidates every enrolled device and backup code.
+     */
+    'Totp' => [
+        'encryptionKey' => env('TOTP_ENCRYPTION_KEY', '__TOTP_ENCRYPTION_KEY__'),
+    ],
+
+    /*
      * Connection information used by the ORM to connect
      * to your application's datastores.
      *

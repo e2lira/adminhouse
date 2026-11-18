@@ -86,6 +86,18 @@ return [
     ],
 
     /*
+     * Second factor (TOTP).
+     *
+     * - encryptionKey - Random value of at least 32 bytes that encrypts the TOTP secrets at rest and keys the
+     *   backup code hashes. Set it with the TOTP_ENCRYPTION_KEY environment variable. Without it, signing in
+     *   as a user who needs a second factor fails closed. Changing it invalidates every enrolled device and
+     *   backup code, so treat it like SECURITY_SALT and back it up with the same care.
+     */
+    'Totp' => [
+        'encryptionKey' => env('TOTP_ENCRYPTION_KEY'),
+    ],
+
+    /*
      * Apply timestamps with the last modified time to static assets (js, css, images).
      * Will append a querystring parameter containing the time the file was modified.
      * This is useful for busting browser caches.

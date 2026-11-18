@@ -168,6 +168,105 @@ class SchemaTest extends DatabaseTestCase
         $this->assertSame(0, (int)$this->db()->execute('SELECT COUNT(*) FROM role_assignments')->fetch()[0]);
     }
 
+    public function testSecondSuperAdministratorIsAllowed(): void
+    {
+        $this->assign($this->createUser('one', null), 'super_administrator', null);
+        $this->assign($this->createUser('two', null), 'super_administrator', null);
+
+        $count = $this->db()->execute(
+            'SELECT COUNT(DISTINCT user_id) FROM role_assignments WHERE role_id = ?',
+            [$this->roleId('super_administrator')],
+        )->fetch()[0];
+        $this->assertSame(2, (int)$count);
+    }
+
+    public function testThirdSuperAdministratorIsRefusedByTheDatabase(): void
+    {
+        $this->assign($this->createUser('one', null), 'super_administrator', null);
+        $this->assign($this->createUser('two', null), 'super_administrator', null);
+        $third = $this->createUser('three', null);
+
+        $this->expectException(PDOException::class);
+        $this->expectExceptionMessage('At most 2 accounts');
+        $this->assign($third, 'super_administrator', null);
+    }
+
+    public function testEndedSuperAdministratorAssignmentStillCountsTowardsTheLimit(): void
+    {
+        $this->assignRole($this->createUser('one', null), 'super_administrator', null, -30, -1);
+        $this->assign($this->createUser('two', null), 'super_administrator', null);
+        $third = $this->createUser('three', null);
+
+        $this->expectException(PDOException::class);
+        $this->assign($third, 'super_administrator', null);
+    }
+
+    public function testOtherRolesAreNotLimited(): void
+    {
+        $dev = $this->createDevelopment();
+        foreach (['a', 'b', 'c'] as $name) {
+            $this->assign($this->createUser($name, null), 'administrator', $dev);
+        }
+
+        $this->assertSame(3, (int)$this->db()->execute('SELECT COUNT(*) FROM role_assignments')->fetch()[0]);
+    }
+
+    public function testAuthEventsAreAppendOnly(): void
+    {
+        $this->db()->execute("INSERT INTO auth_events (event_type, created) VALUES ('password_ok', NOW())");
+
+        try {
+            $this->db()->execute("UPDATE auth_events SET event_type = 'totp_ok'");
+            $this->fail('UPDATE on auth_events must be rejected');
+        } catch (PDOException $e) {
+            $this->assertStringContainsString('append-only', $e->getMessage());
+        }
+
+        $this->expectException(PDOException::class);
+        $this->db()->execute('DELETE FROM auth_events');
+    }
+
+    public function testAuthEventTypeIsRestricted(): void
+    {
+        $this->expectException(PDOException::class);
+        $this->db()->execute("INSERT INTO auth_events (event_type, created) VALUES ('made_up', NOW())");
+    }
+
+    public function testTotpMaterialLivesOutsideUsersAndCredentials(): void
+    {
+        $schema = $this->db()->getSchemaCollection();
+
+        $this->assertSame([], array_values(array_intersect(
+            ['totp_secret', 'totp_enabled', 'backup_codes'],
+            $schema->describe('users')->columns(),
+        )));
+        $this->assertContains('secret_encrypted', $schema->describe('user_totp')->columns());
+        $this->assertContains('code_hash', $schema->describe('user_backup_codes')->columns());
+    }
+
+    public function testDeletingAUserRemovesItsTotpAndBackupCodesButKeepsAuditEvents(): void
+    {
+        $user = $this->createUser('kim');
+        $this->db()->execute(
+            'INSERT INTO user_totp (user_id, secret_encrypted, created) VALUES (?, ?, NOW())',
+            [$user, 'x'],
+        );
+        $this->db()->execute(
+            'INSERT INTO user_backup_codes (user_id, code_hash, created) VALUES (?, ?, NOW())',
+            [$user, 'h'],
+        );
+        $this->db()->execute(
+            "INSERT INTO auth_events (user_id, event_type, created) VALUES (?, 'password_ok', NOW())",
+            [$user],
+        );
+
+        $this->db()->execute('DELETE FROM users WHERE id = ?', [$user]);
+
+        $this->assertSame(0, (int)$this->db()->execute('SELECT COUNT(*) FROM user_totp')->fetch()[0]);
+        $this->assertSame(0, (int)$this->db()->execute('SELECT COUNT(*) FROM user_backup_codes')->fetch()[0]);
+        $this->assertSame(1, (int)$this->db()->execute('SELECT COUNT(*) FROM auth_events')->fetch()[0]);
+    }
+
     private function assign(int $user, string $roleCode, ?int $development): void
     {
         $this->db()->execute(

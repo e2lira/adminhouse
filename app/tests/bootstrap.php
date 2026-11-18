@@ -34,6 +34,12 @@ if (empty($_SERVER['HTTP_HOST']) && !Configure::read('App.fullBaseUrl')) {
     Configure::write('App.fullBaseUrl', 'http://localhost');
 }
 
+// The TOTP secrets are encrypted with TOTP_ENCRYPTION_KEY. The suite must not depend on the developer's own key (or on
+// CI having one), so it supplies a throwaway key unless the environment already provides one.
+if (!Configure::read('Totp.encryptionKey')) {
+    Configure::write('Totp.encryptionKey', 'test-suite-only-totp-key-0123456789-abcdef');
+}
+
 // Fixate now to avoid one-second-leap-issues
 Chronos::setTestNow(Chronos::now());
 

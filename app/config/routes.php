@@ -53,6 +53,8 @@ return function (RouteBuilder $routes): void {
     $routes->scope('/', function (RouteBuilder $builder): void {
         $builder->connect('/', ['controller' => 'Home', 'action' => 'index']);
         $builder->connect('/login', ['controller' => 'Users', 'action' => 'login']);
+        $builder->connect('/login/verify', ['controller' => 'Users', 'action' => 'verify', '_method' => ['GET', 'POST']]);
+        $builder->connect('/login/enroll', ['controller' => 'Users', 'action' => 'enroll', '_method' => ['GET', 'POST']]);
         $builder->connect('/logout', ['controller' => 'Users', 'action' => 'logout']);
         $builder->connect('/developments', ['controller' => 'Developments', 'action' => 'index', '_method' => 'GET']);
     });

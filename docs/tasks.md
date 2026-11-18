@@ -180,3 +180,9 @@
 | REBUILD-003-F3 | Static check that every routed action performs an authorization check (AC-RB-1); runtime check only fires after the action body. | TODO | build | Claude | 2026-11-18 |
 
 | REBUILD-003-F4 | Role assignment date window uses `Date::today()` in `App.defaultTimezone` (UTC): in Mexico an assignment ending today stops granting around 18:00 local. Decide business timezone (per development or America/Mexico_City) and compute today with it. | TODO | build | Claude | 2026-11-18 |
+
+| REBUILD-003c | Slice 3 done 2026-11-18: TOTP second factor with backup codes and sign-in audit; at most two super-administrators enforced in the database. | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F5 | Slice 3 review suggestions: atomic failure counter for parallel verify requests; avoid storing raw submitted usernames on failed password (may contain a pasted password); audit deactivated user abandoning the second step. | TODO | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F6 | Decide whether the max-two super-administrator rule should count only assignments in force (today it counts ended ones, so freeing a slot means deleting history). | TODO | decision | User | 2026-11-18 |
