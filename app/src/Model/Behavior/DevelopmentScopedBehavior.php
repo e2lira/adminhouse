@@ -5,8 +5,10 @@ namespace App\Model\Behavior;
 
 use App\Authorization\DevelopmentScope;
 use App\Authorization\DevelopmentScopeStack;
+use App\Model\Exception\DevelopmentScopeViolation;
 use App\Model\Exception\MissingDevelopmentScopeException;
 use ArrayObject;
+use Cake\Datasource\EntityInterface;
 use Cake\Event\EventInterface;
 use Cake\ORM\Association;
 use Cake\ORM\Behavior;
@@ -87,6 +89,131 @@ class DevelopmentScopedBehavior extends Behavior
         }
 
         $query->where($this->restriction($scope->ids()));
+    }
+
+    /**
+     * Refuse a body that names a development other than the target, and never mass-assign the column.
+     *
+     * @param \Cake\Event\EventInterface<\Cake\ORM\Table> $event Event.
+     * @param \ArrayObject<string, mixed> $data Request data.
+     * @param \ArrayObject<string, mixed> $options Marshalling options (`developmentId`, `developmentScope`).
+     * @return void
+     * @throws \App\Model\Exception\DevelopmentScopeViolation When the body targets another development.
+     */
+    public function beforeMarshal(EventInterface $event, ArrayObject $data, ArrayObject $options): void
+    {
+        $field = $this->writeField();
+        if ($field === null || !$data->offsetExists($field)) {
+            return;
+        }
+
+        $target = $options['developmentId'] ?? null;
+        $scope = $options['developmentScope'] ?? DevelopmentScopeStack::current();
+        $mismatch = $target !== null
+            ? (int)$data[$field] !== (int)$target
+            : $scope instanceof DevelopmentScope && !$scope->allows((int)$data[$field]);
+        if ($mismatch) {
+            throw new DevelopmentScopeViolation();
+        }
+
+        unset($data[$field]);
+    }
+
+    /**
+     * Runs before the rules so that `IsUnique` and `ExistsIn` already see the development of a new entity.
+     *
+     * @param \Cake\Event\EventInterface<\Cake\ORM\Table> $event Event.
+     * @param \Cake\Datasource\EntityInterface $entity Entity.
+     * @param \ArrayObject<string, mixed> $options Save options.
+     * @return void
+     */
+    public function beforeRules(EventInterface $event, EntityInterface $entity, ArrayObject $options): void
+    {
+        $this->guardWrite($entity, $options);
+    }
+
+    /**
+     * @param \Cake\Event\EventInterface<\Cake\ORM\Table> $event Event.
+     * @param \Cake\Datasource\EntityInterface $entity Entity.
+     * @param \ArrayObject<string, mixed> $options Save options.
+     * @return void
+     */
+    public function beforeSave(EventInterface $event, EntityInterface $entity, ArrayObject $options): void
+    {
+        $this->guardWrite($entity, $options);
+    }
+
+    /**
+     * @param \Cake\Event\EventInterface<\Cake\ORM\Table> $event Event.
+     * @param \Cake\Datasource\EntityInterface $entity Entity.
+     * @param \ArrayObject<string, mixed> $options Delete options.
+     * @return void
+     */
+    public function beforeDelete(EventInterface $event, EntityInterface $entity, ArrayObject $options): void
+    {
+        $scope = $this->requireScope();
+        $field = $this->writeField();
+        if ($field !== null && !$scope->allows((int)$entity->get($field))) {
+            throw new DevelopmentScopeViolation();
+        }
+    }
+
+    /**
+     * New entities take their development from the `developmentId` option; existing ones keep theirs. Either way the
+     * target must be inside the scope. Idempotent: it runs for the rules and again for the save.
+     *
+     * @param \Cake\Datasource\EntityInterface $entity Entity.
+     * @param \ArrayObject<string, mixed> $options Save options.
+     * @return void
+     * @throws \App\Model\Exception\MissingDevelopmentScopeException Without a scope.
+     * @throws \App\Model\Exception\DevelopmentScopeViolation When the target is outside the scope or was altered.
+     */
+    private function guardWrite(EntityInterface $entity, ArrayObject $options): void
+    {
+        $scope = $this->requireScope();
+        $field = $this->writeField();
+        if ($field === null) {
+            return;
+        }
+
+        if (!$entity->isNew()) {
+            $outside = $entity->isDirty($field) || !$scope->allows((int)$entity->get($field));
+        } elseif ($field === 'id') {
+            // A development itself: only an all-development scope creates one.
+            $outside = !$scope->isAll();
+        } else {
+            $current = $entity->get($field);
+            $target = $options['developmentId'] ?? $current;
+            $outside = $target === null
+                || ($current !== null && (int)$current !== (int)$target)
+                || !$scope->allows((int)$target);
+            if (!$outside) {
+                $entity->set($field, (int)$target);
+            }
+        }
+        if ($outside) {
+            throw new DevelopmentScopeViolation();
+        }
+    }
+
+    /**
+     * @return \App\Authorization\DevelopmentScope The running operation scope.
+     * @throws \App\Model\Exception\MissingDevelopmentScopeException When there is none.
+     */
+    private function requireScope(): DevelopmentScope
+    {
+        $scope = DevelopmentScopeStack::current();
+
+        return $scope ?? throw new MissingDevelopmentScopeException($this->table()->getAlias());
+    }
+
+    /**
+     * @return string|null The column to guard on writes; null for through-mode tables, which are written by their
+     *  own creation path.
+     */
+    private function writeField(): ?string
+    {
+        return $this->getConfig('through') === null ? (string)$this->getConfig('field') : null;
     }
 
     /**

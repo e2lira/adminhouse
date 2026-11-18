@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Test\Support\Scoped;
 
+use App\Model\Table\ScopedOperationTrait;
 use Cake\ORM\Table;
 
 /**
@@ -10,6 +11,8 @@ use Cake\ORM\Table;
  */
 class PeopleTable extends Table
 {
+    use ScopedOperationTrait;
+
     /**
      * @param array<string, mixed> $config Table configuration.
      * @return void
