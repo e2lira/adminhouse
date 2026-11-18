@@ -15,10 +15,10 @@ declare(strict_types=1);
  * @license   https://opensource.org/licenses/mit-license.php MIT License
  */
 
+use App\Test\Support\TestMigrator;
 use Cake\Chronos\Chronos;
 use Cake\Core\Configure;
 use Cake\TestSuite\ConnectionHelper;
-use Migrations\TestSuite\Migrator;
 
 /**
  * Test runner bootstrap.
@@ -57,7 +57,11 @@ ConnectionHelper::addTestAliases();
 
 // Build the test database schema from the migrations (the schema is the migrations, not a SQL dump).
 //
+// Migrations run on `test_migrations`: the owner login that owns every table and bypasses row-level security. The
+// application and its tests run as the runtime role (`test`), which owns nothing, so the policies are exercised for
+// real (RLS-SEC-001). Create both roles first with `php bin/provision_db_roles.php`.
+//
 // The Migrator rebuilds the database when the migration state differs from the migration files. Tables are not
 // truncated afterwards: the role catalogue is seeded by a migration and must survive. Tests that create rows clean
 // them up through App\Test\Support\DatabaseTestCase.
-(new Migrator())->run([], false);
+(new TestMigrator())->run(['connection' => 'test_migrations'], false);

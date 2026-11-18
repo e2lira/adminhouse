@@ -3,11 +3,12 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Authorization;
 
-use App\Authorization\AccessControl;
 use App\Authorization\RoleAssignmentException;
 use App\Authorization\RoleAssignmentManager;
 use App\Authorization\RoleAssignmentNotAllowed;
 use App\Clock\BusinessClock;
+use App\Test\Support\ActingAccessControl;
+use App\Test\Support\ActingRoleAssignmentManager;
 use App\Test\Support\DatabaseTestCase;
 use Cake\Chronos\Chronos;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -48,7 +49,7 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
 
     private function manager(): RoleAssignmentManager
     {
-        return new RoleAssignmentManager();
+        return new ActingRoleAssignmentManager();
     }
 
     private function today(): string
@@ -103,8 +104,8 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
         $this->assertSame($this->today(), (string)$row['starts_on']);
         $this->assertNull($row['ends_on']);
         $this->assertFalse((bool)$row['read_only']);
-        $this->assertTrue((new AccessControl())->allowedFor($this->bob, 'payments.create')->allows($this->devA));
-        $this->assertFalse((new AccessControl())->allowedFor($this->bob, 'payments.create')->allows($this->devB));
+        $this->assertTrue((new ActingAccessControl())->allowedFor($this->bob, 'payments.create')->allows($this->devA));
+        $this->assertFalse((new ActingAccessControl())->allowedFor($this->bob, 'payments.create')->allows($this->devB));
     }
 
     public function testGrantCanBeReadOnlyAndEndDated(): void
@@ -298,7 +299,7 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
     public function testEndingKeepsTheRowAndRemovesAccessImmediately(): void
     {
         $id = $this->grantAs($this->root, $this->devA, 'bob', 'accountant', $this->businessDay(-5));
-        $access = new AccessControl();
+        $access = new ActingAccessControl();
         $this->assertTrue($access->allowedFor($this->bob, 'payments.create')->allows($this->devA));
 
         $this->manager()->end($this->adminA, $this->devA, $id);
@@ -345,7 +346,7 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
 
         $this->manager()->end($this->adminA, $this->devA, $id);
 
-        $access = new AccessControl();
+        $access = new ActingAccessControl();
         $this->assertFalse($access->allowedFor($this->bob, 'payments.create')->allows($this->devA));
         Chronos::setTestNow(Chronos::now()->addDays(4));
         $this->assertFalse($access->allowedFor($this->bob, 'payments.create')->allows($this->devA));
@@ -482,12 +483,16 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
 
             public function log($level, string|Stringable $message, array $context = []): void
             {
-                if (str_starts_with(ltrim((string)$message), 'SELECT')) {
+                // The session setup (`set_config`) and the commit probe (`SELECT 1`) are not what the manager asks.
+                $sql = ltrim((string)$message);
+                $isProbe = rtrim($sql, "; 
+") === 'SELECT 1';
+                if (str_starts_with($sql, 'SELECT') && !str_contains($sql, 'set_config(') && !$isProbe) {
                     $this->selects++;
                 }
             }
         };
-        $driver = $this->db()->getDriver();
+        $driver = $this->appDb()->getDriver();
         $driver->setLogger($logger);
         try {
             $rows = $this->manager()->listFor($this->adminA, $this->devA);
@@ -537,7 +542,7 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
 
     private function managerAt(string $utcInstant): RoleAssignmentManager
     {
-        return new RoleAssignmentManager(null, null, new BusinessClock(null, new Chronos($utcInstant, 'UTC')));
+        return new ActingRoleAssignmentManager(null, null, new BusinessClock(null, new Chronos($utcInstant, 'UTC')));
     }
 
     public function testEndingComputesYesterdayInTheBusinessZone(): void

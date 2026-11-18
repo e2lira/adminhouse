@@ -359,6 +359,38 @@ return [
             'log' => false,
             //'init' => ['SET GLOBAL innodb_stats_on_metadata = 0'],
         ],
+
+        /*
+         * Migration login (RLS-SEC-001, ADR-0005 section 1): owns every table and bypasses row-level security.
+         * It is used only by `bin/cake migrations ... -c migrations` and by the test bootstrap, never by the
+         * running application. `default` and `test` use the runtime role, which owns nothing.
+         */
+        'migrations' => [
+            'className' => Connection::class,
+            'driver' => Postgres::class,
+            'persistent' => false,
+            'timezone' => 'UTC',
+            'encoding' => 'utf8',
+            'flags' => [],
+            'cacheMetadata' => false,
+            'quoteIdentifiers' => false,
+            'log' => false,
+        ],
+
+        /*
+         * Test counterpart of `migrations`. Its name makes ConnectionHelper alias `migrations` to it in tests.
+         */
+        'test_migrations' => [
+            'className' => Connection::class,
+            'driver' => Postgres::class,
+            'persistent' => false,
+            'timezone' => 'UTC',
+            'encoding' => 'utf8',
+            'flags' => [],
+            'cacheMetadata' => false,
+            'quoteIdentifiers' => false,
+            'log' => false,
+        ],
     ],
 
     /*

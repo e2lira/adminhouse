@@ -21,6 +21,8 @@ use App\Authentication\ActiveUserIdentifier;
 use App\Authentication\CredentialsIdentifier;
 use App\Authentication\SecondFactorFormAuthenticator;
 use App\Middleware\HostHeaderMiddleware;
+use App\Middleware\RequestTransactionMiddleware;
+use App\Middleware\SessionUserMiddleware;
 use Authentication\AuthenticationService;
 use Authentication\AuthenticationServiceInterface;
 use Authentication\AuthenticationServiceProviderInterface;
@@ -117,9 +119,17 @@ class Application extends BaseApplication implements
                 'samesite' => CookieInterface::SAMESITE_LAX,
             ]))
 
+            // Row-level security (ADR-0005 s.1, layer 2): the whole request is ONE transaction that carries the
+            // session values PostgreSQL derives access from. It opens before authentication because sign-in
+            // already reads the database and writes the audit trail.
+            ->add(new RequestTransactionMiddleware())
+
             // Identifies the user for every request; the Authentication component in AppController
             // then refuses anonymous access to any action not explicitly opened.
             ->add(new AuthenticationMiddleware($this))
+
+            // Hands the identified user id to PostgreSQL (`app.user_id`); nothing else is set by the application.
+            ->add(new SessionUserMiddleware())
 
             // Default deny (RB-R6): after the action runs, a request that never authorized (or skipped
             // explicitly) fails. Must stay after authentication: it decorates the identity.

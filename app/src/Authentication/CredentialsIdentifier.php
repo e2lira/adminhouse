@@ -6,7 +6,6 @@ namespace App\Authentication;
 use ArrayAccess;
 use Authentication\Identifier\AbstractIdentifier;
 use Authentication\PasswordHasher\DefaultPasswordHasher;
-use Cake\ORM\Locator\LocatorAwareTrait;
 
 /**
  * Identifies a user by username and password.
@@ -14,11 +13,12 @@ use Cake\ORM\Locator\LocatorAwareTrait;
  * The password hash lives in `user_credentials`, not in `users` (ADR-0005), so the stock
  * password identifier cannot be used: it would need the hash on the identity, and the identity is
  * stored in the session. This identifier checks the hash itself and returns the user without it.
+ *
+ * The runtime database role has no privilege on `user_credentials`: the hash is read through the definer function
+ * behind AccountGateway (RLS-SEC-001).
  */
 class CredentialsIdentifier extends AbstractIdentifier
 {
-    use LocatorAwareTrait;
-
     /**
      * Hash checked when the user does not exist, so both outcomes cost the same time.
      */
@@ -35,34 +35,22 @@ class CredentialsIdentifier extends AbstractIdentifier
             return null;
         }
 
-        /** @var \App\Model\Table\UsersTable $users */
-        $users = $this->fetchTable('Users');
-        $user = $users->find()
-            ->select(['id', 'username', 'status', 'person_id'])
-            ->where(['username' => $username])
-            ->first();
-
-        /** @var \App\Model\Table\UserCredentialsTable $credentialsTable */
-        $credentialsTable = $this->fetchTable('UserCredentials');
-        $credential = $user === null ? null : $credentialsTable->find()
-            ->select(['user_id', 'password_hash'])
-            ->where(['user_id' => $user->id])
-            ->first();
+        $gateway = new AccountGateway();
+        $account = $gateway->findForSignIn($username);
 
         $hasher = new DefaultPasswordHasher();
-        $hash = $credential?->password_hash ?? self::decoyHash();
+        $hash = $account['password_hash'] ?? self::decoyHash();
         $matches = $hasher->check($password, $hash);
 
-        if ($user === null || $credential === null || !$matches || $user->status !== 'active') {
+        if ($account === null || $account['password_hash'] === null || !$matches || $account['status'] !== 'active') {
             return null;
         }
 
         if ($hasher->needsRehash($hash)) {
-            $credential->password_hash = $hasher->hash($password);
-            $credentialsTable->save($credential);
+            $gateway->rehash($account['id'], $hash, $hasher->hash($password));
         }
 
-        return $user;
+        return $gateway->identity($account);
     }
 
     /**

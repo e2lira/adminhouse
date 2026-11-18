@@ -198,3 +198,7 @@
 | REBUILD-003-F1 | Done 2026-11-18: hidden password input on Windows (PowerShell secure read) and Unix (stty), failing closed. Manual console check pending. | DONE | build | Claude | 2026-11-18 |
 
 | REBUILD-003-F1 | Manual console check done 2026-11-18: input hidden in PowerShell (user confirmed). | DONE | build | Claude | 2026-11-18 |
+
+| RLS-SEC-001 | Done 2026-11-18: RLS layer implemented, dedicated security review done, policy suite passing against real PostgreSQL. Condition of ADR-0005 met for the tables that exist; each new module must add its tables with `RowLevelSecurity` helpers and policy tests. | DONE | build | Claude | 2026-11-18 |
+
+| RLS-002 | Future: separate login role for jobs (removes the job-context residual); webhook context and `record_gateway_payment`; `audit_log` in its own transaction; occupancies and guard projection policies. | TODO | build | Claude | 2026-11-18 |

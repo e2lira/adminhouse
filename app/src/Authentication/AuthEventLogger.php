@@ -11,6 +11,12 @@ use Psr\Http\Message\ServerRequestInterface;
 /**
  * Writes the sign-in audit trail (`auth_events`, append-only in the database).
  *
+ * The runtime database role cannot insert into the table, and there is no identity yet when a sign-in fails: rows are
+ * written by the definer function `auth_event_log()` (RLS-SEC-001).
+ *
+ * The row is written on the separate `auth_side` connection (autocommit), not inside the request transaction: a failed
+ * attempt followed by a forced error must still leave its trace.
+ *
  * Only identifiers are recorded: never a password, a code or a secret. A failure to write is not swallowed:
  * a sign-in that cannot be audited must not succeed silently.
  */
@@ -28,7 +34,8 @@ final class AuthEventLogger
     private const MAX_TEXT = 255;
 
     /**
-     * @param \Cake\Database\Connection|null $connection Connection; defaults to `default`.
+     * @param \Cake\Database\Connection|null $connection Connection; defaults to `auth_side`, the autocommit
+     *  connection of the runtime role, so the row outlives a request that rolls back.
      */
     public function __construct(private ?Connection $connection = null)
     {
@@ -48,8 +55,7 @@ final class AuthEventLogger
         ?ServerRequestInterface $request = null,
     ): void {
         $this->connection()->execute(
-            'INSERT INTO auth_events (user_id, username, event_type, ip, user_agent, created)
-             VALUES (:user_id, :username, :type, :ip, :agent, NOW())',
+            'SELECT auth_event_log(:user_id, :username, :type, :ip, :agent)',
             [
                 'user_id' => $userId,
                 'username' => $this->clip($username),
@@ -94,7 +100,7 @@ final class AuthEventLogger
     private function connection(): Connection
     {
         /** @var \Cake\Database\Connection $connection */
-        $connection = $this->connection ??= ConnectionManager::get('default');
+        $connection = $this->connection ??= ConnectionManager::get('auth_side');
 
         return $connection;
     }

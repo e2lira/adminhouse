@@ -184,6 +184,18 @@ unset($fullBaseUrl);
  * This will also remove the loaded config data from memory.
  */
 Cache::setConfig(Configure::consume('Cache'));
+
+/*
+ * `auth_side` (and `test_auth_side` for the suite): a second connection as the SAME runtime role as `default` (or
+ * `test`), used only for what must survive a rolled-back request: the sign-in audit trail and spending a TOTP step or
+ * a backup code (RLS-SEC-001). It inherits every setting of its base connection; app_local.php may override any.
+ */
+foreach (['auth_side' => 'default', 'test_auth_side' => 'test'] as $side => $base) {
+    $base = (array)Configure::read('Datasources.' . $base);
+    if ($base !== []) {
+        Configure::write('Datasources.' . $side, array_merge($base, (array)Configure::read('Datasources.' . $side)));
+    }
+}
 ConnectionManager::setConfig(Configure::consume('Datasources'));
 TransportFactory::setConfig(Configure::consume('EmailTransport'));
 Mailer::setConfig(Configure::consume('Email'));

@@ -98,6 +98,27 @@ return [
             //'schema' => 'myapp',
             'url' => env('DATABASE_TEST_URL', 'postgres://my_app:secret@localhost/test_myapp'),
         ],
+
+        /*
+         * Migration login (RLS-SEC-001): owns the tables, bypasses row-level security, used only for migrations
+         * and by the test bootstrap. Create the roles with `php bin/provision_db_roles.php --write-local`,
+         * which fills in the password. The application itself runs as the role of `default`.
+         */
+        'migrations' => [
+            'host' => 'localhost',
+            'username' => 'kualitet_owner',
+            'password' => 'secret',
+            'database' => 'my_app',
+            'url' => env('DATABASE_MIGRATIONS_URL', null),
+        ],
+
+        'test_migrations' => [
+            'host' => 'localhost',
+            'username' => 'kualitet_owner',
+            'password' => 'secret',
+            'database' => 'test_myapp',
+            'url' => env('DATABASE_TEST_MIGRATIONS_URL', null),
+        ],
     ],
 
     /*

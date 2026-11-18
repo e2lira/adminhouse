@@ -97,3 +97,8 @@ Update this file after EVERY task.
 - New app: `app/` (CakePHP 5.4.4, PHP 8.3 system interpreter, PostgreSQL databases `kualitet_app` and `kualitet_app_test`, role `kualitet_app`; credentials in `app/config/app_local.php`).
 - Commands from `app/`: `vendor/bin/phpunit`, `vendor/bin/phpcs`. CI: `.github/workflows/app-ci.yml`.
 - Legacy app stays at the repository root with PHP 7.4 (`tools/php74`) only as a functional reference.
+
+## RLS-SEC-001 (2026-11-18)
+- Database roles: `kualitet_app` (runtime, `default`/`test`/`auth_side`), `kualitet_owner` (`migrations`/`test_migrations`), `kualitet_definer` (NOLOGIN). Provision with `php bin/provision_db_roles.php --write-local` (superuser via pgpass) before migrating a new database.
+- Migrate: `bin/cake migrations migrate -c migrations`. `bin/cake create_user` needs the owner login enabled.
+- New scoped tables: use `App\Database\RowLevelSecurity` helpers and add policy tests under `tests/TestCase/Database/Rls`. Residual risks are listed at the end of ADR-0005.

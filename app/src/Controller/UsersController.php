@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Authentication\AccountGateway;
 use App\Authentication\AuthEventLogger;
 use App\Authentication\SecondFactor\PendingLogin;
 use App\Authentication\SecondFactor\SecondFactorService;
@@ -254,13 +255,8 @@ class UsersController extends AppController
      */
     private function activeUser(int $userId): ?EntityInterface
     {
-        /** @var \App\Model\Table\UsersTable $users */
-        $users = $this->fetchTable('Users');
-
-        return $users->find()
-            ->select(['id', 'username', 'status', 'person_id'])
-            ->where(['id' => $userId, 'status' => $users::STATUS_ACTIVE])
-            ->first();
+        // Read through a definer function: the second step runs before an identity exists (RLS-SEC-001).
+        return (new AccountGateway())->findActive($userId);
     }
 
     /**

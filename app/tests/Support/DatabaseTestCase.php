@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Test\Support;
 
 use App\Clock\BusinessClock;
+use App\Database\DevelopmentContext;
 use Authentication\PasswordHasher\DefaultPasswordHasher;
 use Cake\Database\Connection;
 use Cake\Datasource\ConnectionManager;
@@ -12,8 +13,15 @@ use Cake\TestSuite\TestCase;
 /**
  * Base class for tests that need the migrated PostgreSQL schema.
  *
- * Rows created by tests are removed in setUp. The seeded `roles` catalogue is
- * kept because it is part of the schema, not test data.
+ * Two connections are in play (RLS-SEC-001):
+ * - `db()` is the migration/owner login. It bypasses row-level security and is meant for fixtures and for
+ *   assertions about stored state, never for the code under test.
+ * - `appDb()` is the runtime role the application runs as: it owns nothing and every policy applies to it. The code
+ *   under test uses it (through the `default` connection). Call actAs() or actAsJob() first to give it the session
+ *   values a request or a job would have.
+ *
+ * Rows created by tests are removed in setUp. The seeded `roles` catalogue is kept because it is part of the
+ * schema, not test data.
  */
 abstract class DatabaseTestCase extends TestCase
 {
@@ -48,12 +56,85 @@ abstract class DatabaseTestCase extends TestCase
         );
     }
 
+    protected function tearDown(): void
+    {
+        // A test that opened a session (actAs) must not leak its transaction into the next one.
+        $connection = $this->appDb();
+        while ($connection->inTransaction()) {
+            $connection->rollback();
+        }
+
+        parent::tearDown();
+    }
+
+    /**
+     * The migration login: owns the tables and bypasses row-level security. For fixtures and assertions only.
+     *
+     * @return \Cake\Database\Connection
+     */
     protected function db(): Connection
+    {
+        /** @var \Cake\Database\Connection $connection */
+        $connection = ConnectionManager::get('migrations');
+
+        return $connection;
+    }
+
+    /**
+     * The runtime role, as the application connects (`default`, aliased to `test` in the suite).
+     *
+     * @return \Cake\Database\Connection
+     */
+    protected function appDb(): Connection
     {
         /** @var \Cake\Database\Connection $connection */
         $connection = ConnectionManager::get('default');
 
         return $connection;
+    }
+
+    /**
+     * Start a request-like session on the runtime connection: one open transaction with `app.context = 'request'`
+     * and `app.user_id` set (null leaves it empty, as before sign-in). Rolled back in tearDown.
+     *
+     * @param int|null $userId Signed-in user, or null for an anonymous request.
+     * @return void
+     */
+    protected function actAs(?int $userId): void
+    {
+        $context = new DevelopmentContext($this->appDb());
+        $context->beginRequest($userId);
+    }
+
+    /**
+     * Start a job-like session: `app.context = 'job'` and the developments the job may touch.
+     *
+     * @param list<int> $developmentIds Developments of the job.
+     * @return void
+     */
+    protected function actAsJob(array $developmentIds): void
+    {
+        (new DevelopmentContext($this->appDb()))->beginJob($developmentIds);
+    }
+
+    /**
+     * Commit the session opened by actAs() or actAsJob(), so the owner connection can see what it wrote.
+     *
+     * @return void
+     */
+    protected function commitSession(): void
+    {
+        (new DevelopmentContext($this->appDb()))->commit();
+    }
+
+    /**
+     * End the session opened by actAs() or actAsJob() without keeping its changes.
+     *
+     * @return void
+     */
+    protected function endSession(): void
+    {
+        (new DevelopmentContext($this->appDb()))->rollback();
     }
 
     /**

@@ -6,19 +6,26 @@ namespace App\Command;
 use App\Clock\BusinessClock;
 use App\Console\HiddenInput;
 use App\Console\HiddenInputUnavailable;
-use App\Model\Table\RolesTable;
 use Authentication\PasswordHasher\DefaultPasswordHasher;
 use Cake\Command\Command;
 use Cake\Console\Arguments;
 use Cake\Console\ConsoleIo;
 use Cake\Console\ConsoleOptionParser;
 use Cake\Core\Configure;
-use Cake\I18n\DateTime;
+use Cake\Database\Connection;
+use Cake\Datasource\ConnectionManager;
 use Cake\ORM\Locator\LocatorAwareTrait;
+use PDOException;
 use Throwable;
 
 /**
  * Creates a user with its credentials, mainly to bootstrap the first super administrator.
+ *
+ * Account creation is a bootstrap, not an application feature: the runtime database role cannot write `users` or
+ * `user_credentials` and has no EXECUTE on the definer function `user_create()` (a role that can be tricked into running
+ * SQL must not be able to mint a super administrator). The command therefore connects as the migration (owner) login,
+ * the `migrations` datasource, which exists only for the CLI. In production that login is NOLOGIN outside migration
+ * windows: enable it (`provision_db_roles.php --owner-login`) while creating the first account.
  *
  * The password is always read interactively; it is never accepted as an argument or option, so it
  * cannot leak through the shell history or the process list.
@@ -78,9 +85,6 @@ class CreateUserCommand extends Command
         if ($user->getErrors()) {
             return $this->fail($io, 'Invalid username: ' . implode(' ', $this->flatten($user->getErrors())));
         }
-        if ($users->exists(['username' => $username])) {
-            return $this->fail($io, sprintf('A user named "%s" already exists.', $username));
-        }
 
         try {
             $password = $this->askSecret($io, 'Password');
@@ -98,21 +102,26 @@ class CreateUserCommand extends Command
         }
 
         try {
-            $users->getConnection()->transactional(function () use ($users, $user, $password, $args): void {
-                $users->saveOrFail($user, ['associated' => false]);
+            $hash = (new DefaultPasswordHasher())->hash($password);
+            $startsOn = (new BusinessClock())->today()->format('Y-m-d');
+            $asSuper = (bool)$args->getOption('super-administrator');
 
-                $credentials = $this->fetchTable('UserCredentials')->newEntity([
-                    'user_id' => $user->id,
-                    'password_hash' => (new DefaultPasswordHasher())->hash($password),
-                    'password_changed_at' => DateTime::now(),
-                ]);
-                $this->fetchTable('UserCredentials')->saveOrFail($credentials);
-
-                if ($args->getOption('super-administrator')) {
-                    $this->assignSuperAdministrator((int)$user->id);
-                }
+            // The only write path to users and credentials is `user_create()`, executed here by the owner login
+            // (RLS-SEC-001). One transaction, so the user, its credentials and its role land together or not at all.
+            /** @var \Cake\Database\Connection $owner */
+            $owner = ConnectionManager::get('migrations');
+            $owner->transactional(function (Connection $owner) use ($username, $hash, $asSuper, $startsOn): void {
+                $owner->execute(
+                    'SELECT user_create(:username, :hash, :super, CAST(:starts_on AS date))',
+                    ['username' => $username, 'hash' => $hash, 'super' => $asSuper, 'starts_on' => $startsOn],
+                    ['username' => 'string', 'hash' => 'string', 'super' => 'boolean', 'starts_on' => 'string'],
+                );
             });
         } catch (Throwable $e) {
+            if ($this->isDuplicateUsername($e)) {
+                return $this->fail($io, sprintf('A user named "%s" already exists.', $username));
+            }
+
             return $this->fail($io, 'The user could not be created: ' . $e->getMessage());
         }
 
@@ -122,23 +131,18 @@ class CreateUserCommand extends Command
     }
 
     /**
-     * @param int $userId User receiving the global role.
-     * @return void
+     * @param \Throwable $error Error raised while creating the account.
+     * @return bool Whether PostgreSQL rejected the username as a duplicate.
      */
-    private function assignSuperAdministrator(int $userId): void
+    private function isDuplicateUsername(Throwable $error): bool
     {
-        $assignments = $this->fetchTable('RoleAssignments');
-        $role = $this->fetchTable('Roles')->find()
-            ->where(['code' => RolesTable::SUPER_ADMINISTRATOR])
-            ->firstOrFail();
+        for ($e = $error; $e !== null; $e = $e->getPrevious()) {
+            if ($e instanceof PDOException && ($e->errorInfo[0] ?? null) === '23505') {
+                return true;
+            }
+        }
 
-        $assignments->saveOrFail($assignments->newEntity([
-            'user_id' => $userId,
-            'role_id' => $role->id,
-            'development_id' => null,
-            'starts_on' => (new BusinessClock())->today(),
-            'read_only' => false,
-        ]));
+        return false;
     }
 
     /**

@@ -134,3 +134,5 @@
 - [2026-11-18] REBUILD-003 slice 3 verified and committed locally: TOTP second factor for super-administrators (150 tests green). Next: slice 4 (role-assignment management screen).
 
 - [2026-11-18] REBUILD-003 slice 4 verified and committed locally: role-assignment management screen (223 tests green). Identity and RBAC slices 1 to 4 complete. Pending follow-ups: F1, F3, F4, F5, F7; RLS-SEC-001 before first deployment.
+
+- [2026-11-18] RLS-SEC-001 done and committed locally: PostgreSQL row-level security with three roles, definer functions, dedicated security review (407 tests green). Migrations now run with `bin/cake migrations migrate -c migrations`; new databases need `bin/provision_db_roles.php` first.

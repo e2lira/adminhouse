@@ -15,7 +15,7 @@ class SecondFactorRequirementTest extends DatabaseTestCase
 {
     private function serviceAt(string $utcInstant): SecondFactorService
     {
-        return new SecondFactorService(null, null, null, new BusinessClock(null, new Chronos($utcInstant, 'UTC')));
+        return new SecondFactorService(clock: new BusinessClock(null, new Chronos($utcInstant, 'UTC')));
     }
 
     public function testAssignmentEndingTodayStillRequiresTheSecondFactorInTheEveningInMexico(): void

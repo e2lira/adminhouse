@@ -56,3 +56,36 @@ Other environment agnostic settings can be changed in `config/app.php`.
 The app skeleton uses [Milligram](https://milligram.io/) (v1.3) minimalist CSS
 framework by default. You can, however, replace it with any other library or
 custom styles.
+
+## Database roles and row-level security (RLS-SEC-001)
+
+The application connects as `kualitet_app`, a login that owns no table and has no `BYPASSRLS`; every table has
+`FORCE ROW LEVEL SECURITY` (ADR-0005 section 1, layer 2). Migrations run as `kualitet_owner` (owns the tables,
+`BYPASSRLS`). The `SECURITY DEFINER` functions belong to `kualitet_definer` (`NOLOGIN`, `BYPASSRLS`).
+
+```bash
+# once per cluster and database, as a PostgreSQL superuser (PG* variables or ~/.pgpass); idempotent, prints no password
+php bin/provision_db_roles.php --write-local      # generates the owner password into config/app_local.php
+
+# migrations always use the owner connection
+bin/cake migrations migrate -c migrations
+```
+
+In production set `ALTER ROLE kualitet_owner NOLOGIN` after the migration window. Re-running the provisioning script
+KEEPS that state (it never re-enables `LOGIN` by itself); pass `--owner-login` to turn `LOGIN` back on before the next
+migration window or before creating an account. The script warns on stderr when it creates `kualitet_app` without a
+password (set `KUALITET_APP_PASSWORD` or `Datasources.default.password` and run it again).
+
+Safeguards around the runtime role:
+
+- `bin/cake create_user` is a bootstrap: it runs `user_create()` through the `migrations` (owner) connection, because
+  `kualitet_app` has no EXECUTE on that function. It therefore needs the owner login to be enabled.
+- The sign-in audit trail and the spending of TOTP steps and backup codes go through the `auth_side` connection (same role
+  as `default`, autocommit; copied from `default` in `config/bootstrap.php`, `test_auth_side` from `test`), so they persist
+  when the request transaction rolls back. Override it in `config/app_local.php` only if it must differ from `default`.
+- The first request or job of a process checks that `default` is not the table owner, `BYPASSRLS` or a superuser
+  (`App\Database\RuntimeRoleGuard`) and fails otherwise. `DevelopmentContext::commit()` raises when the transaction had
+  been aborted instead of reporting a silent rollback as success.
+The test suite migrates through `test_migrations` and runs as the runtime role, so the policies are exercised for real.
+New scoped tables get their policies from `App\Database\RowLevelSecurity` (see its class comment). A request or job tells
+PostgreSQL who acts only through `App\Database\DevelopmentContext` (`app.user_id`, `app.context`, `app.job_dev_ids`).

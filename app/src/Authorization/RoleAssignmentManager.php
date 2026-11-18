@@ -387,12 +387,14 @@ class RoleAssignmentManager
      */
     private function findActiveUserId(string $username): int
     {
+        // A definer function: the row-level security policies hide users who hold no role in the actor's
+        // developments yet, and naming a new grantee is exactly this screen's job (RLS-SEC-001).
         $id = $this->connection()->execute(
-            "SELECT id FROM users WHERE username = :username AND status = 'active'",
+            'SELECT role_assignment_grantee_id(:username)',
             ['username' => trim($username)],
             ['username' => 'string'],
         )->fetch();
-        if ($id === false) {
+        if ($id === false || $id[0] === null) {
             // Unknown and disabled look the same: the screen must not reveal which accounts exist but are off.
             throw new RoleAssignmentException(RoleAssignmentException::USER_NOT_FOUND);
         }

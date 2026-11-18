@@ -12,7 +12,12 @@ use LogicException;
  * Second-factor state of a user: who needs it, the TOTP device and the one-time backup codes.
  *
  * Every state change that must happen exactly once (accepting a time step, spending a backup code) is a single
- * conditional UPDATE whose row count is checked, so two concurrent submissions of the same code cannot both win.
+ * conditional UPDATE inside a definer function that reports whether it changed a row, so two concurrent
+ * submissions of the same code cannot both win.
+ *
+ * The runtime database role has no privilege on the second-factor tables: every read and write goes through the
+ * `auth_*` definer functions (RLS-SEC-001). They take the user explicitly because the pre-auth steps run before an
+ * identity exists.
  */
 final class SecondFactorService
 {
@@ -28,6 +33,8 @@ final class SecondFactorService
 
     /**
      * @param \Cake\Database\Connection|null $connection Connection; defaults to `default`.
+     * @param \Cake\Database\Connection|null $sideConnection Autocommit connection for spending a step or a code;
+     *  defaults to `auth_side`.
      * @param \App\Authentication\SecondFactor\TotpService|null $totp TOTP calculator.
      * @param \App\Authentication\SecondFactor\SecretVault|null $vault Secret vault; created on first use so
      *  that asking who needs a second factor does not require the encryption key.
@@ -35,6 +42,7 @@ final class SecondFactorService
      */
     public function __construct(
         private ?Connection $connection = null,
+        private ?Connection $sideConnection = null,
         private ?TotpService $totp = null,
         ?SecretVault $vault = null,
         private ?BusinessClock $clock = null,
@@ -51,23 +59,13 @@ final class SecondFactorService
      */
     public function isRequired(int $userId): bool
     {
-        if ($this->hasConfirmedDevice($userId)) {
-            return true;
-        }
-
         $today = ($this->clock ??= new BusinessClock())->today()->format('Y-m-d');
 
-        return $this->connection()->execute(
-            'SELECT 1
-             FROM role_assignments ra
-             JOIN roles r ON r.id = ra.role_id AND r.code = \'super_administrator\'
-             WHERE ra.user_id = :user_id
-               AND ra.starts_on <= :today
-               AND (ra.ends_on IS NULL OR ra.ends_on >= :today_end)
-             LIMIT 1',
-            ['user_id' => $userId, 'today' => $today, 'today_end' => $today],
-            ['user_id' => 'integer', 'today' => 'string', 'today_end' => 'string'],
-        )->fetch() !== false;
+        return (bool)$this->connection()->execute(
+            'SELECT auth_second_factor_required(:user_id, CAST(:today AS date))',
+            ['user_id' => $userId, 'today' => $today],
+            ['user_id' => 'integer', 'today' => 'string'],
+        )->fetch()[0];
     }
 
     /**
@@ -76,11 +74,11 @@ final class SecondFactorService
      */
     public function hasConfirmedDevice(int $userId): bool
     {
-        return $this->connection()->execute(
-            'SELECT 1 FROM user_totp WHERE user_id = :user_id AND confirmed_at IS NOT NULL',
+        return (bool)$this->connection()->execute(
+            'SELECT auth_totp_confirmed(:user_id)',
             ['user_id' => $userId],
             ['user_id' => 'integer'],
-        )->fetch() !== false;
+        )->fetch()[0];
     }
 
     /**
@@ -98,20 +96,13 @@ final class SecondFactorService
             throw new LogicException('The user already has a confirmed TOTP device.');
         }
 
-        $this->connection()->execute(
-            'INSERT INTO user_totp (user_id, secret_encrypted, created)
-             VALUES (:user_id, :secret, NOW())
-             ON CONFLICT (user_id) DO NOTHING',
+        // The database keeps the first secret until it is confirmed; null means there is nothing to enrol.
+        $row = $this->connection()->execute(
+            'SELECT auth_totp_begin(:user_id, :secret)',
             ['user_id' => $userId, 'secret' => $this->vault()->encrypt($this->totp()->generateSecret())],
             ['user_id' => 'integer', 'secret' => 'string'],
-        );
-
-        $row = $this->connection()->execute(
-            'SELECT secret_encrypted FROM user_totp WHERE user_id = :user_id AND confirmed_at IS NULL',
-            ['user_id' => $userId],
-            ['user_id' => 'integer'],
         )->fetch();
-        if ($row === false) {
+        if ($row === false || $row[0] === null) {
             throw new LogicException('The user already has a confirmed TOTP device.');
         }
 
@@ -133,13 +124,13 @@ final class SecondFactorService
     public function confirmEnrolment(int $userId, string $code): ?array
     {
         return $this->connection()->transactional(function () use ($userId, $code): ?array {
+            // The function locks the pending row until the transaction ends.
             $stored = $this->connection()->execute(
-                'SELECT secret_encrypted FROM user_totp
-                 WHERE user_id = :user_id AND confirmed_at IS NULL FOR UPDATE',
+                'SELECT auth_totp_pending_secret(:user_id)',
                 ['user_id' => $userId],
                 ['user_id' => 'integer'],
             )->fetch();
-            if ($stored === false) {
+            if ($stored === false || $stored[0] === null) {
                 return null;
             }
 
@@ -148,11 +139,14 @@ final class SecondFactorService
                 return null;
             }
 
-            $this->connection()->execute(
-                'UPDATE user_totp SET confirmed_at = NOW(), last_used_step = :step WHERE user_id = :user_id',
-                ['step' => $step, 'user_id' => $userId],
-                ['step' => 'integer', 'user_id' => 'integer'],
-            );
+            $confirmed = (bool)$this->connection()->execute(
+                'SELECT auth_totp_confirm(:user_id, :step)',
+                ['user_id' => $userId, 'step' => $step],
+                ['user_id' => 'integer', 'step' => 'integer'],
+            )->fetch()[0];
+            if (!$confirmed) {
+                return null;
+            }
 
             return $this->replaceBackupCodes($userId);
         });
@@ -168,8 +162,7 @@ final class SecondFactorService
     public function verifyTotp(int $userId, string $code): bool
     {
         $row = $this->connection()->execute(
-            'SELECT secret_encrypted, last_used_step FROM user_totp
-             WHERE user_id = :user_id AND confirmed_at IS NOT NULL',
+            'SELECT secret_encrypted, last_used_step FROM auth_totp_device(:user_id)',
             ['user_id' => $userId],
             ['user_id' => 'integer'],
         )->fetch();
@@ -183,15 +176,13 @@ final class SecondFactorService
             return false;
         }
 
-        // Only the request that moves last_used_step forward wins; a concurrent replay updates zero rows.
-        $statement = $this->connection()->execute(
-            'UPDATE user_totp SET last_used_step = :step
-             WHERE user_id = :user_id AND (last_used_step IS NULL OR last_used_step < :step_again)',
-            ['step' => $step, 'user_id' => $userId, 'step_again' => $step],
-            ['step' => 'integer', 'user_id' => 'integer', 'step_again' => 'integer'],
-        );
-
-        return $statement->rowCount() === 1;
+        // Only the request that moves last_used_step forward wins; a concurrent replay changes no row. It is spent on
+        // the autocommit connection: if the request later fails and rolls back, the code must stay spent.
+        return (bool)$this->sideConnection()->execute(
+            'SELECT auth_totp_use_step(:user_id, :step)',
+            ['user_id' => $userId, 'step' => $step],
+            ['user_id' => 'integer', 'step' => 'integer'],
+        )->fetch()[0];
     }
 
     /**
@@ -209,14 +200,12 @@ final class SecondFactorService
             return false;
         }
 
-        $statement = $this->connection()->execute(
-            'UPDATE user_backup_codes SET used_at = NOW()
-             WHERE user_id = :user_id AND code_hash = :hash AND used_at IS NULL',
+        // Spent on the autocommit connection, like a TOTP step: a rolled-back request must not give the code back.
+        return (bool)$this->sideConnection()->execute(
+            'SELECT auth_backup_code_consume(:user_id, :hash)',
             ['user_id' => $userId, 'hash' => $this->vault()->hashBackupCode($normalized)],
             ['user_id' => 'integer', 'hash' => 'string'],
-        );
-
-        return $statement->rowCount() === 1;
+        )->fetch()[0];
     }
 
     /**
@@ -227,34 +216,46 @@ final class SecondFactorService
      */
     public function replaceBackupCodes(int $userId): array
     {
-        return $this->connection()->transactional(function () use ($userId): array {
-            $this->connection()->execute(
-                'DELETE FROM user_backup_codes WHERE user_id = :user_id',
-                ['user_id' => $userId],
-                ['user_id' => 'integer'],
-            );
-
-            // Keyed by the raw code so a (vanishingly unlikely) duplicate is drawn again instead of kept.
-            $codes = [];
-            for ($issued = 0; $issued < self::BACKUP_CODE_COUNT;) {
-                $raw = $this->randomCode();
-                if (isset($codes[$raw])) {
-                    continue;
-                }
-                $codes[$raw] = substr($raw, 0, self::BACKUP_CODE_HALF) . '-' . substr($raw, self::BACKUP_CODE_HALF);
-                $issued++;
+        // Keyed by the raw code so a (vanishingly unlikely) duplicate is drawn again instead of kept.
+        $codes = [];
+        for ($issued = 0; $issued < self::BACKUP_CODE_COUNT;) {
+            $raw = $this->randomCode();
+            if (isset($codes[$raw])) {
+                continue;
             }
+            $codes[$raw] = substr($raw, 0, self::BACKUP_CODE_HALF) . '-' . substr($raw, self::BACKUP_CODE_HALF);
+            $issued++;
+        }
 
-            foreach (array_keys($codes) as $raw) {
-                $this->connection()->execute(
-                    'INSERT INTO user_backup_codes (user_id, code_hash, created) VALUES (:user_id, :hash, NOW())',
-                    ['user_id' => $userId, 'hash' => $this->vault()->hashBackupCode((string)$raw)],
-                    ['user_id' => 'integer', 'hash' => 'string'],
-                );
-            }
+        $hashes = [];
+        foreach (array_keys($codes) as $raw) {
+            $hashes[] = $this->vault()->hashBackupCode((string)$raw);
+        }
 
-            return array_values($codes);
-        });
+        // One call deletes the old set and stores the new one, atomically.
+        $this->connection()->execute(
+            'SELECT auth_backup_codes_replace(:user_id, CAST(:hashes AS text[]))',
+            ['user_id' => $userId, 'hashes' => $this->pgArray($hashes)],
+            ['user_id' => 'integer', 'hashes' => 'string'],
+        );
+
+        return array_values($codes);
+    }
+
+    /**
+     * A PostgreSQL array literal of text values, passed as ONE bound parameter.
+     *
+     * @param list<string> $values Values.
+     * @return string
+     */
+    private function pgArray(array $values): string
+    {
+        $quoted = array_map(
+            static fn(string $value): string => '"' . addcslashes($value, '"\\') . '"',
+            $values,
+        );
+
+        return '{' . implode(',', $quoted) . '}';
     }
 
     /**
@@ -278,6 +279,17 @@ final class SecondFactorService
     {
         /** @var \Cake\Database\Connection $connection */
         $connection = $this->connection ??= ConnectionManager::get('default');
+
+        return $connection;
+    }
+
+    /**
+     * @return \Cake\Database\Connection
+     */
+    private function sideConnection(): Connection
+    {
+        /** @var \Cake\Database\Connection $connection */
+        $connection = $this->sideConnection ??= ConnectionManager::get('auth_side');
 
         return $connection;
     }

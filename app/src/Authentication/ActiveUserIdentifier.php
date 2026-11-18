@@ -5,18 +5,16 @@ namespace App\Authentication;
 
 use ArrayAccess;
 use Authentication\Identifier\AbstractIdentifier;
-use Cake\ORM\Locator\LocatorAwareTrait;
 
 /**
  * Reloads a signed-in user by id on every request and only returns them while their account is `active`.
  *
  * This is what makes disabling a user effective on their next request instead of when the session expires
- * (REBUILD-003-F2). It costs one primary-key query per request.
+ * (REBUILD-003-F2). It costs one primary-key query per request, through the definer function behind
+ * AccountGateway: the user id of the request is not known to PostgreSQL yet at this point (RLS-SEC-001).
  */
 class ActiveUserIdentifier extends AbstractIdentifier
 {
-    use LocatorAwareTrait;
-
     public const CREDENTIAL_ID = 'id';
 
     /**
@@ -29,12 +27,6 @@ class ActiveUserIdentifier extends AbstractIdentifier
             return null;
         }
 
-        /** @var \App\Model\Table\UsersTable $users */
-        $users = $this->fetchTable('Users');
-
-        return $users->find()
-            ->select(['id', 'username', 'status', 'person_id'])
-            ->where(['id' => (int)$id, 'status' => $users::STATUS_ACTIVE])
-            ->first();
+        return (new AccountGateway())->findActive((int)$id);
     }
 }
