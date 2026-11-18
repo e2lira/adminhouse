@@ -26,6 +26,14 @@ test.xlsx
 *.sql.gz
 *.dump
 
+# New CakePHP 5 application (ADR-0006)
+/app/vendor/
+/app/config/app_local.php
+/app/config/.env
+/app/tmp/
+/app/logs/
+/app/webroot/files/
+
 # Generated artifacts and local tool state
 /.archify/
 /.orchestrator/

@@ -88,3 +88,12 @@ Update this file after EVERY task.
 - ADR-0005 revision 4 is Accepted with condition RLS-SEC-001: security review of the row-level security policies, definer functions and triggers, plus the policy test suite passing against a real database, before production.
 - Order of work for this track: RH-004 inventory and a complete production dump; framework upgrade (ADR-0004 stages 0 to 3) on the current schema; PostgreSQL production move; remodel stage on 5.x with data migration, RBAC seed and rebuilt reports.
 - Do not implement any of this on CakePHP 3.9.
+
+## ADR-0006 rebuild decision (2026-11-17)
+- The legacy CakePHP 3.9 application is now a functional reference. Do not port it; build the new CakePHP 5 application from RH-005, RH-006 and ADR-0005.
+- Next tasks: REBUILD-000 (location), REBUILD-001 (feature inventory), REBUILD-002 (skeleton), REBUILD-003 (identity and RBAC).
+
+## REBUILD-002 skeleton (2026-11-17)
+- New app: `app/` (CakePHP 5.4.4, PHP 8.3 system interpreter, PostgreSQL databases `kualitet_app` and `kualitet_app_test`, role `kualitet_app`; credentials in `app/config/app_local.php`).
+- Commands from `app/`: `vendor/bin/phpunit`, `vendor/bin/phpcs`. CI: `.github/workflows/app-ci.yml`.
+- Legacy app stays at the repository root with PHP 7.4 (`tools/php74`) only as a functional reference.

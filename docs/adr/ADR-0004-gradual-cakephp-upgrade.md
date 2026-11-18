@@ -59,3 +59,7 @@ The portable PHP 7.4 runtime serves stages 0 to 2. The hardening scope (SEC-001,
 
 ## Follow-up (2026-11-17, multi-development and RBAC)
 - User decision recorded in ADR-0005: the framework upgrade (stages 0 to 3) runs first on the current schema. Multi-development and RBAC (RH-005, RH-006) are introduced afterwards as a separate stage on 5.x with its own data migration and the rebuilt reports. The PostgreSQL production move never shares a release with a framework stage.
+
+
+## Superseded (2026-11-17)
+- Superseded by ADR-0006: there is no production server, so the user chose to build a new CakePHP 5 application instead of upgrading this one in stages. Stages 1 to 3 are cancelled; the PHP 7.4 runner remains for the legacy reference.

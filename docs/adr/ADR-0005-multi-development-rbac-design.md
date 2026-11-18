@@ -126,6 +126,8 @@ Ledger and process rules:
 
 ### 5. Sequencing within ADR-0004
 
+**Amended by ADR-0006 (2026-11-17):** there is no production server, so the user replaced the staged upgrade with a new CakePHP 5 application that implements this design from the start. The text below is kept for history.
+
 Confirmed by the user 2026-11-17 (G2 decision 3). The framework upgrade (stages 0 to 3) runs first on the current schema. This model is then introduced as a separate stage on 5.x with its own data migration and the rebuilt reports (CAKE5-REPORTS-001). The PostgreSQL production move (PG-PROD-001) happens before that stage, or as its first step, so row-level security ships with the new model; it never shares a release with a framework stage.
 
 ## Alternatives

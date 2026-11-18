@@ -136,3 +136,31 @@
 | REPO-001 | First commit to `git@github.com:e2lira/adminhouse.git`: local repository initialized with `.gitignore` and remote; 953 files ready, no secret among them. Pending: user review of the file list, fresh-context review before commit (AGENTS rule), and explicit approval to commit and push; check whether the remote already has content. | TODO - user approval | repository | Claude | 2026-11-17 |
 
 | REPO-001 | Updated: first local commit `4793471` done (on top of remote `de284f1`). Pending: check whether the remote already has content, decide public or private visibility, rotate SMTP passwords, then push with explicit approval. | IN_PROGRESS - push pending | repository | Claude | 2026-11-17 |
+
+| PG-PROD-001 | Re-scoped 2026-11-17: no active production server. The first real deployment starts directly on PostgreSQL; no MariaDB data migration unless real data appears. | TODO (simplified) | planning | Claude | 2026-11-17 |
+
+| SECRETS-001 | Re-scoped 2026-11-17: no production server to configure. Still recommended: rotate the `gmail` and `alpa` SMTP passwords. | DONE (rotation recommended) | security | Claude | 2026-11-17 |
+
+| REPO-001 | Done 2026-11-17: `main` pushed by the user; remote verified at `d5613b6`. | DONE | repository | Claude | 2026-11-17 |
+
+| REBUILD-000 | Decide where the new CakePHP 5 application lives (same repository in a new directory, new repository, or replacing the legacy code). | TODO - user decision | planning | Claude | 2026-11-17 |
+
+| REBUILD-001 | Feature inventory (parity checklist) of the legacy application: every screen, action, report, email and file flow, classified as implement, redesign (with the ADR-0005 element) or retire. | TODO | planning | Claude | 2026-11-17 |
+
+| REBUILD-002 | New CakePHP 5 skeleton with PostgreSQL, test tooling (strict TDD), coding standards and CI basics. | TODO | build | Claude | 2026-11-17 |
+
+| REBUILD-003 | Module 1: identity, TOTP and RBAC (permissions, roles, assignments, policies, default deny) with development scoping. | TODO | build | Claude | 2026-11-17 |
+
+| ADR-0004 stages 1-3 | Cancelled by ADR-0006. | CANCELLED | n/a | Claude | 2026-11-17 |
+
+| SEC-001 / G3 (legacy) | No longer leads to a production release (ADR-0006). The `.DS_Store` HTTP check applies only if the legacy application is served again. | ON HOLD | legacy | Claude | 2026-11-17 |
+
+| REBUILD-000 | Done 2026-11-17: new application in `app/` within the same repository. | DONE | planning | Claude | 2026-11-17 |
+
+| REBUILD-001 | Draft done 2026-11-17: `docs/feature-inventory.md`. Pending user decisions: 11 controllers unreachable today, 5 probable dead stubs (including `Email::informeSeg`, whose saldo was ported on 2026-11-17), report list per module. | DRAFT - user review | planning | Claude | 2026-11-17 |
+
+| AZ-8 | Legacy reference: `Condominio::pa` and `Gasto::pa` print URL input unescaped (reflected XSS). Retired in the rebuild; make them `protected` only if the legacy app is served again. | NOTED | security | Claude | 2026-11-17 |
+
+| REBUILD-001 | Updated: all decisions taken (0 open). Remaining: report list per module, confirmed when the reports module starts. | DONE | planning | Claude | 2026-11-17 |
+
+| REBUILD-002 | Done 2026-11-17: CakePHP 5.4.4 skeleton in `app/` on PostgreSQL; tests and coding standard green; root CI workflow added (not yet run). | DONE | build | Claude | 2026-11-17 |
