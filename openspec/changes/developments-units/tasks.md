@@ -29,32 +29,32 @@ Requirement traces use spec names: DS = development-scope, DM = development-mana
 
 ## PR 1a-i: Scoped behavior, stash and exceptions (S-1 pre-split)
 
-- Branch: `feat/du-1a-i-scope-behavior`
+- Branches (split into three stacked PRs): `feat/du-1a-i-1-scope-stack` (1.1, 1.2, stack), `feat/du-1a-i-2-scoped-reads` (1.3 to 1.6), `feat/du-1a-i-3-scoped-writes` (1.7 to 1.14)
 - Goal: layer-1 `DevelopmentScopedBehavior` with fail-closed reads, scoped writes, exception-safe rules-phase scope stash (W-A, W-B). No table uses it yet.
 - Satisfies: DS "Scoped queries", "Fail closed without scope", "Scope on writes" (AD1, AD2, AD4, AD4b).
 - Est. lines: ~330
 
 Tasks (TDD order):
-- [ ] 1.1 RED: unit tests for exceptions `MissingDevelopmentScopeException` (LogicException) and `DevelopmentScopeViolation` (types, messages carry no row data).
-- [ ] 1.2 GREEN: create both exception classes under `app/src/Model/` (or existing exceptions namespace).
-- [ ] 1.3 RED: behavior tests on a test-only scoped table fixture: primary find without `developmentScope` throws; `isAll` adds no filter; empty scope yields `1 = 0` and returns no rows; scope with ids filters `field` (default `development_id`; `field => 'id'` and `through` config variants).
-- [ ] 1.4 GREEN: implement `DevelopmentScopedBehavior::beforeFind` with config `field`, `through`.
-- [ ] 1.5 RED: contained-association tests (AD2): `primary = false` inherits only when source table is scoped and join is composite-FK `(development_id, x_id)`; through-mode targets (`People`) without explicit scope throw.
-- [ ] 1.6 GREEN: implement association inheritance rule and through-mode guard.
-- [ ] 1.7 RED: write-path tests: `beforeMarshal` throws `DevelopmentScopeViolation` when body `development_id` differs from scope target; column not accessible; save option `developmentId` sets it on new entities; dirty `development_id` on update or target outside scope throws; inserting a `developments` row requires `isAll()`.
-- [ ] 1.8 GREEN: implement `beforeMarshal`, `beforeSave` target checks.
-- [ ] 1.9 RED (W-A): exception-safety tests: a validation rule throws during `save()`; the NEXT unscoped primary find on the same table MUST throw `MissingDevelopmentScopeException` (stash not leaked). Also: stash is cleared after a successful save, after a failed save, and after `delete()`.
-- [ ] 1.10 RED (W-B): stash-as-shared-stack tests: (a) an `ExistsIn` rule whose target is a DIFFERENT scoped table (simulating `units.section_id -> Sections`) runs its primary find under the same operation scope and succeeds; (b) nested association saves push/pop independently and restore the outer scope after the inner save; (c) after the outermost operation ends the stack is empty.
-- [ ] 1.11 GREEN (W-A, W-B): implement a shared static scope stack (registry) used by all scoped tables. Override `save()`/`delete()` in a trait (e.g. `ScopedOperationTrait`, or in the behavior via the table) that reads `developmentScope` from options, pushes it, and pops it in `try/finally`. Primary finds with no option consult the top of the stack only while non-empty. Behavior still handles `Model.beforeRules` requirement check (save without `developmentScope` option throws).
-- [ ] 1.12 RED/GREEN: map DB `23505`/`23503` raised by races to a field error (AD4b) with a unit test using a stubbed driver exception.
-- [ ] 1.13 REFACTOR: extract scope-resolution helpers; keep phpcs clean.
-- [ ] 1.14 Docs: progress, tasks, change-log, test-results.
+- [x] 1.1 RED: unit tests for exceptions `MissingDevelopmentScopeException` (LogicException) and `DevelopmentScopeViolation` (types, messages carry no row data).
+- [x] 1.2 GREEN: create both exception classes under `app/src/Model/` (or existing exceptions namespace).
+- [x] 1.3 RED: behavior tests on a test-only scoped table fixture: primary find without `developmentScope` throws; `isAll` adds no filter; empty scope yields `1 = 0` and returns no rows; scope with ids filters `field` (default `development_id`; `field => 'id'` and `through` config variants).
+- [x] 1.4 GREEN: implement `DevelopmentScopedBehavior::beforeFind` with config `field`, `through`.
+- [x] 1.5 RED: contained-association tests (AD2, revised after security review): a non-primary query always needs an explicit scope; a scoped parent hands its scope only to contained associations whose foreign key links the two development columns; unscoped parents, plain foreign keys, many-to-many, matching/joinWith and through-mode targets (`People`) without explicit scope throw.
+- [x] 1.6 GREEN: implement explicit scope propagation to development-linked contains (explicit inner scope narrowed, never widened) and the through-mode guard (composite primary keys rejected).
+- [x] 1.7 RED: write-path tests: `beforeMarshal` throws `DevelopmentScopeViolation` when body `development_id` differs from scope target; column not accessible; save option `developmentId` sets it on new entities; dirty `development_id` on update or target outside scope throws; inserting a `developments` row requires `isAll()`.
+- [x] 1.8 GREEN: implement `beforeMarshal`, `beforeSave` target checks.
+- [x] 1.9 RED (W-A): exception-safety tests: a validation rule throws during `save()`; the NEXT unscoped primary find on the same table MUST throw `MissingDevelopmentScopeException` (stash not leaked). Also: stash is cleared after a successful save, after a failed save, and after `delete()`.
+- [x] 1.10 RED (W-B): stash-as-shared-stack tests: (a) an `ExistsIn` rule whose target is a DIFFERENT scoped table (simulating `units.section_id -> Sections`) runs its primary find under the same operation scope and succeeds; (b) nested association saves push/pop independently and restore the outer scope after the inner save; (c) after the outermost operation ends the stack is empty.
+- [x] 1.11 GREEN (W-A, W-B): implement a shared static scope stack (registry) used by all scoped tables. Override `save()`/`delete()` in a trait (e.g. `ScopedOperationTrait`, or in the behavior via the table) that reads `developmentScope` from options, pushes it, and pops it in `try/finally`. Primary finds with no option consult the top of the stack only while non-empty. Behavior still handles `Model.beforeRules` requirement check (save without `developmentScope` option throws).
+- [x] 1.12 RED/GREEN: map DB `23505`/`23503` raised by races to a field error (AD4b) with a unit test using a stubbed driver exception. Review fix: only the outermost atomic save without associated entities converts, and only outside a transaction or with savepoints; saveMany, nested saves and caller transactions without savepoints rethrow.
+- [x] 1.13 REFACTOR: extract scope-resolution helpers; keep phpcs clean.
+- [x] 1.14 Docs: progress, tasks, change-log, test-results.
 
 Verification:
 - `cd app && vendor/bin/phpunit` (alone); `cd app && vendor/bin/phpcs`.
 - No migration.
 
-PR description: per `.github/pull_request_template.md`; Database change: "No database change"; state that no production Table uses the behavior yet; not verified: behavior against real RLS (lands with 3a).
+PR descriptions: `docs/pr/du-1a-i-1-scope-stack.md`, `du-1a-i-2-scoped-reads.md`, `du-1a-i-3-scoped-writes.md`, per `.github/pull_request_template.md`; Database change: "No database change"; state that no production Table uses the behavior yet; not verified: behavior against real RLS (lands with 3a).
 Rollback boundary: revert the PR; nothing depends on it yet.
 
 ---
@@ -271,6 +271,7 @@ Tasks:
 - [ ] 11.5 RED: integration tests: list only in-scope people; foreign person 404; add by adminA and dataEntryA; accountant/supervisor can view, cannot add/edit; shared person edit refused (clear non-oracle message); creating a person whose email exists in B gives an indistinguishable outcome (no hint); missing name rejected.
 - [ ] 11.6 GREEN: `PeopleController` index/add/edit, templates (Spanish), nested routes `/developments/{developmentId}/people`; no link-existing-person action (AD10).
 - [ ] 11.7 REFACTOR; Docs.
+- [ ] 11.8 Carry-over from the PR 1a-i review (S2): people have no write guard in `DevelopmentScopedBehavior` (through-mode); every people write path (`createFor()`, edit) MUST first read the person under a scope, with a test that a write without that read is refused.
 
 Verification: phpunit (alone), phpcs.
 PR description: template; "No database change".
