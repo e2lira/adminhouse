@@ -38,8 +38,10 @@ if (empty($_SERVER['HTTP_HOST']) && !Configure::read('App.fullBaseUrl')) {
 Configure::write('Console.hideSecrets', false);
 
 // The TOTP secrets are encrypted with TOTP_ENCRYPTION_KEY. The suite must not depend on the developer's own key (or on
-// CI having one), so it supplies a throwaway key unless the environment already provides one.
-if (!Configure::read('Totp.encryptionKey')) {
+// CI having one), so it supplies a throwaway key unless the environment already provides a usable one. A key shorter
+// than 32 bytes is replaced too: in CI, app_local.php is generated from app_local.example.php and holds the
+// `__TOTP_ENCRYPTION_KEY__` placeholder, which is set but not a valid key.
+if (strlen((string)Configure::read('Totp.encryptionKey')) < 32) {
     Configure::write('Totp.encryptionKey', 'test-suite-only-totp-key-0123456789-abcdef');
 }
 

@@ -1,5 +1,6 @@
 <!--
 Title: conventional commit style, for example `feat(app): add unit fees per development`.
+Base branch (AGENTS.md): work branches target `develop`; promotions go `develop` -> `qa` -> `main`.
 Keep the PR small and focused. Delete the hints in comments before submitting.
 -->
 

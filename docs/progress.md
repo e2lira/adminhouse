@@ -136,3 +136,5 @@
 - [2026-11-18] REBUILD-003 slice 4 verified and committed locally: role-assignment management screen (223 tests green). Identity and RBAC slices 1 to 4 complete. Pending follow-ups: F1, F3, F4, F5, F7; RLS-SEC-001 before first deployment.
 
 - [2026-11-18] RLS-SEC-001 done and committed locally: PostgreSQL row-level security with three roles, definer functions, dedicated security review (407 tests green). Migrations now run with `bin/cake migrations migrate -c migrations`; new databases need `bin/provision_db_roles.php` first.
+
+- [2026-11-18] PR #1 merged to `main`. CI was red because of the TOTP key placeholder in CI; fixed on `fix/ci-totp-test-key` (targets `develop`). New promotion flow: work branches -> `develop` -> `qa` -> `main`.
