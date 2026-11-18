@@ -132,3 +132,5 @@
 - [2026-11-18] REBUILD-003 slice 1 committed (`bd62a64`); slice 2 verified (82 tests green): permissions, development scope, default deny, per-request user reload. Next: confirm the role matrix, commit, then slice 3 (TOTP).
 
 - [2026-11-18] REBUILD-003 slice 3 verified and committed locally: TOTP second factor for super-administrators (150 tests green). Next: slice 4 (role-assignment management screen).
+
+- [2026-11-18] REBUILD-003 slice 4 verified and committed locally: role-assignment management screen (223 tests green). Identity and RBAC slices 1 to 4 complete. Pending follow-ups: F1, F3, F4, F5, F7; RLS-SEC-001 before first deployment.

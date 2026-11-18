@@ -57,5 +57,23 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/login/enroll', ['controller' => 'Users', 'action' => 'enroll', '_method' => ['GET', 'POST']]);
         $builder->connect('/logout', ['controller' => 'Users', 'action' => 'logout']);
         $builder->connect('/developments', ['controller' => 'Developments', 'action' => 'index', '_method' => 'GET']);
+
+        $assignments = '/developments/{developmentId}/role-assignments';
+        $constraints = ['developmentId' => '[0-9]+', 'assignmentId' => '[0-9]+'];
+        $builder->connect(
+            $assignments,
+            ['controller' => 'RoleAssignments', 'action' => 'index', '_method' => 'GET'],
+            $constraints + ['pass' => ['developmentId']],
+        );
+        $builder->connect(
+            $assignments,
+            ['controller' => 'RoleAssignments', 'action' => 'add', '_method' => 'POST'],
+            $constraints + ['pass' => ['developmentId']],
+        );
+        $builder->connect(
+            $assignments . '/{assignmentId}/end',
+            ['controller' => 'RoleAssignments', 'action' => 'end', '_method' => 'POST'],
+            $constraints + ['pass' => ['developmentId', 'assignmentId']],
+        );
     });
 };

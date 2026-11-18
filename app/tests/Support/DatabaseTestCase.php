@@ -23,6 +23,7 @@ abstract class DatabaseTestCase extends TestCase
      */
     protected const TEST_DATA_TABLES = [
         'auth_events',
+        'role_assignment_events',
         'role_assignments',
         'user_credentials',
         'users',

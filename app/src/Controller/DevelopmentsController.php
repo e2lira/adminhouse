@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Authorization\AccessControl;
+use App\Authorization\RoleAssignmentManager;
+
 /**
  * Developments the signed-in user may see.
  *
@@ -21,6 +24,12 @@ class DevelopmentsController extends AppController
         $this->Authorization->authorize($query, 'index');
         $developments = $this->Authorization->applyScope($query, 'index')->all();
 
-        $this->set(compact('developments'));
+        // Link to the role screen only where the viewer may open it (one query, not one per row).
+        $manageable = (new AccessControl())->allowedFor(
+            (int)$this->request->getAttribute('identity')->getIdentifier(),
+            RoleAssignmentManager::PERMISSION,
+        );
+
+        $this->set(compact('developments', 'manageable'));
     }
 }
