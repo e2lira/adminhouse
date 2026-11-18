@@ -95,3 +95,5 @@
 | REBUILD-003-F4 | Business time zone for assignment windows | `vendor/bin/phpunit`, `vendor/bin/phpcs`, migrate/rollback/migrate on `kualitet_app`. | Boundary tests at 02:00Z (previous local day) and 06:30Z (new local day) green; SQL and PHP dates agree. | `OK (244 tests, 730 assertions)`; PHPCS exit 0; `20261118000010` up; no `Date::today()` left in `src` or `templates`. | PASS | Console output | 2026-11-18 |
 
 | REBUILD-003-F1 | Hidden password input for `create_user` | `vendor/bin/phpunit`, `vendor/bin/phpcs`. | New tests red first, then green. | 6 new tests red (class missing), then `OK (250 tests, 741 assertions)`; PHPCS exit 0. Real-console check not automated. | PASS | Console output | 2026-11-18 |
+
+| REBUILD-003-F1 manual | Hidden password input in a real Windows PowerShell console | User ran the smoke script `HiddenInput::read()` in PowerShell and typed a test value. | Typed characters not shown. | User confirmed "Sí, se oculta" (2026-11-18). | PASS | User confirmation | 2026-11-18 |

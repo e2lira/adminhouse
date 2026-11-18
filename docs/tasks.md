@@ -196,3 +196,5 @@
 | REBUILD-003-F4 | Done 2026-11-18: business clock in central Mexico time for every "today" check, PHP and SQL. | DONE | build | Claude | 2026-11-18 |
 
 | REBUILD-003-F1 | Done 2026-11-18: hidden password input on Windows (PowerShell secure read) and Unix (stty), failing closed. Manual console check pending. | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F1 | Manual console check done 2026-11-18: input hidden in PowerShell (user confirmed). | DONE | build | Claude | 2026-11-18 |
