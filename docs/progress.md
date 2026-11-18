@@ -126,3 +126,5 @@
 - [2026-11-17] Feature inventory complete: 367 legacy actions, 0 open decisions. Next: REBUILD-002 (CakePHP 5 skeleton in `app/`).
 
 - [2026-11-17] REBUILD-002 done: CakePHP 5.4.4 skeleton in `app/` on PostgreSQL 18, tests and coding standard green. Next: REBUILD-003 (identity, TOTP and RBAC with development scoping), test-first.
+
+- [2026-11-17] REBUILD-003 slice 1 verified: identity schema, role catalogue and password sign-in in `app/` (41 tests green). Next: slice 2 (permissions, development scoping, default deny).

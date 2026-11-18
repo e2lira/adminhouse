@@ -164,3 +164,9 @@
 | REBUILD-001 | Updated: all decisions taken (0 open). Remaining: report list per module, confirmed when the reports module starts. | DONE | planning | Claude | 2026-11-17 |
 
 | REBUILD-002 | Done 2026-11-17: CakePHP 5.4.4 skeleton in `app/` on PostgreSQL; tests and coding standard green; root CI workflow added (not yet run). | DONE | build | Claude | 2026-11-17 |
+
+| REBUILD-003a | Slice 1 done 2026-11-17: identity schema, fixed roles, password sign-in, `create_user` command. Not committed. | DONE | build | Claude | 2026-11-17 |
+
+| REBUILD-003-F1 | `create_user` echoes the password on Windows consoles (hidden input only on Unix ttys). Fix before creating real accounts on Windows. | TODO | build | Claude | 2026-11-17 |
+
+| REBUILD-003-F2 | A user disabled while signed in keeps the session; re-check user status (and later role assignments) on each request. Planned in slice 2. | TODO | build | Claude | 2026-11-17 |

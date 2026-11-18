@@ -16,7 +16,12 @@ declare(strict_types=1);
  */
 namespace App;
 
+use App\Authentication\CredentialsIdentifier;
 use App\Middleware\HostHeaderMiddleware;
+use Authentication\AuthenticationService;
+use Authentication\AuthenticationServiceInterface;
+use Authentication\AuthenticationServiceProviderInterface;
+use Authentication\Middleware\AuthenticationMiddleware;
 use Cake\Core\Configure;
 use Cake\Core\ContainerInterface;
 use Cake\Datasource\FactoryLocator;
@@ -29,6 +34,8 @@ use Cake\Http\MiddlewareQueue;
 use Cake\ORM\Locator\TableLocator;
 use Cake\Routing\Middleware\AssetMiddleware;
 use Cake\Routing\Middleware\RoutingMiddleware;
+use Cake\Routing\Router;
+use Psr\Http\Message\ServerRequestInterface;
 
 /**
  * Application setup class.
@@ -38,7 +45,7 @@ use Cake\Routing\Middleware\RoutingMiddleware;
  *
  * @extends \Cake\Http\BaseApplication<\App\Application>
  */
-class Application extends BaseApplication
+class Application extends BaseApplication implements AuthenticationServiceProviderInterface
 {
     /**
      * Load all the application configuration and bootstrap logic.
@@ -95,7 +102,11 @@ class Application extends BaseApplication
             // https://book.cakephp.org/5/en/security/csrf.html#cross-site-request-forgery-csrf-middleware
             ->add(new CsrfProtectionMiddleware([
                 'httponly' => true,
-            ]));
+            ]))
+
+            // Identifies the user for every request; the Authentication component in AppController
+            // then refuses anonymous access to any action not explicitly opened.
+            ->add(new AuthenticationMiddleware($this));
 
         return $middlewareQueue;
     }
@@ -125,5 +136,30 @@ class Application extends BaseApplication
         // $eventManager->on(new SomeCustomListenerClass());
 
         return $eventManager;
+    }
+
+    /**
+     * Session-based sign-in with username and password.
+     *
+     * @param \Psr\Http\Message\ServerRequestInterface $request Request.
+     * @return \Authentication\AuthenticationServiceInterface
+     */
+    public function getAuthenticationService(ServerRequestInterface $request): AuthenticationServiceInterface
+    {
+        $loginUrl = Router::url(['controller' => 'Users', 'action' => 'login']);
+
+        $service = new AuthenticationService([
+            'unauthenticatedRedirect' => $loginUrl,
+            'queryParam' => 'redirect',
+        ]);
+
+        $service->loadAuthenticator('Authentication.Session', ['identifier' => CredentialsIdentifier::class]);
+        $service->loadAuthenticator('Authentication.Form', [
+            'identifier' => CredentialsIdentifier::class,
+            'loginUrl' => $loginUrl,
+            'fields' => ['username' => 'username', 'password' => 'password'],
+        ]);
+
+        return $service;
     }
 }

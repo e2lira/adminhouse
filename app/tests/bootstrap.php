@@ -46,15 +46,9 @@ session_id('cli');
 // Otherwise, table objects inside migrations would use the default datasource
 ConnectionHelper::addTestAliases();
 
-// Use migrations to build test database schema.
+// Build the test database schema from the migrations (the schema is the migrations, not a SQL dump).
 //
-// Will rebuild the database if the migration state differs
-// from the migration history in files.
-//
-// If you are not using CakePHP's migrations you can
-// hook into your migration tool of choice here or
-// load schema from a SQL dump file with
-// use Cake\TestSuite\Fixture\SchemaLoader;
-// (new SchemaLoader())->loadSqlFiles('./tests/schema.sql', 'test');
-
-(new Migrator())->run();
+// The Migrator rebuilds the database when the migration state differs from the migration files. Tables are not
+// truncated afterwards: the role catalogue is seeded by a migration and must survive. Tests that create rows clean
+// them up through App\Test\Support\DatabaseTestCase.
+(new Migrator())->run([], false);

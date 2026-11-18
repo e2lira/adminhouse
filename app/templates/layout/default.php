@@ -14,16 +14,15 @@
  * @var \App\View\AppView $this
  */
 
-$cakeDescription = 'CakePHP: the rapid development php framework';
+$identity = $this->getRequest()->getAttribute('identity');
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
     <?= $this->Html->charset() ?>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>
-        <?= $cakeDescription ?>:
-        <?= $this->fetch('title') ?>
+        Kualitet - <?= h($this->fetch('title')) ?>
     </title>
     <?= $this->Html->meta('icon') ?>
 
@@ -36,12 +35,13 @@ $cakeDescription = 'CakePHP: the rapid development php framework';
 <body>
     <nav class="top-nav">
         <div class="top-nav-title">
-            <a href="<?= $this->Url->build('/') ?>"><span>Cake</span>PHP</a>
+            <a href="<?= $this->Url->build('/') ?>"><span>Kuali</span>tet</a>
         </div>
+        <?php if ($identity) : ?>
         <div class="top-nav-links">
-            <a target="_blank" rel="noopener" href="https://book.cakephp.org/5/">Documentation</a>
-            <a target="_blank" rel="noopener" href="https://api.cakephp.org/">API</a>
+            <?= $this->Form->postLink('Cerrar sesión', ['controller' => 'Users', 'action' => 'logout']) ?>
         </div>
+        <?php endif; ?>
     </nav>
     <main class="main">
         <div class="container">
