@@ -2,7 +2,8 @@ name: app (CakePHP 5)
 
 on:
   push:
-    branches: [main]
+    # Promotion flow: feature branches -> develop -> qa -> main (AGENTS.md). Every integration branch runs the suite.
+    branches: [develop, qa, main]
     paths:
       - 'app/**'
       - '.github/workflows/app-ci.yml'
