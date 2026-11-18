@@ -191,14 +191,62 @@ class SchemaTest extends DatabaseTestCase
         $this->assign($third, 'super_administrator', null);
     }
 
-    public function testEndedSuperAdministratorAssignmentStillCountsTowardsTheLimit(): void
+    public function testEndedSuperAdministratorAssignmentFreesItsSlotAndKeepsHistory(): void
     {
         $this->assignRole($this->createUser('one', null), 'super_administrator', null, -30, -1);
+        $this->assign($this->createUser('two', null), 'super_administrator', null);
+        $this->assign($this->createUser('three', null), 'super_administrator', null);
+
+        $rows = $this->db()->execute(
+            'SELECT COUNT(*) FROM role_assignments WHERE role_id = ?',
+            [$this->roleId('super_administrator')],
+        )->fetch()[0];
+        $this->assertSame(3, (int)$rows);
+    }
+
+    public function testFutureSuperAdministratorAssignmentCountsTowardsTheLimit(): void
+    {
+        $this->assignRole($this->createUser('one', null), 'super_administrator', null, 10, null);
+        $this->assign($this->createUser('two', null), 'super_administrator', null);
+        $third = $this->createUser('three', null);
+
+        $this->expectException(PDOException::class);
+        $this->expectExceptionMessage('At most 2 accounts');
+        $this->assign($third, 'super_administrator', null);
+    }
+
+    public function testAssignmentEndingTodayStillCountsTowardsTheLimit(): void
+    {
+        $this->assignRole($this->createUser('one', null), 'super_administrator', null, -30, 0);
         $this->assign($this->createUser('two', null), 'super_administrator', null);
         $third = $this->createUser('three', null);
 
         $this->expectException(PDOException::class);
         $this->assign($third, 'super_administrator', null);
+    }
+
+    public function testRecordingAnAlreadyEndedSuperAdministratorAssignmentIsAllowedAtTheLimit(): void
+    {
+        $this->assign($this->createUser('one', null), 'super_administrator', null);
+        $this->assign($this->createUser('two', null), 'super_administrator', null);
+        $this->assignRole($this->createUser('three', null), 'super_administrator', null, -60, -30);
+
+        $rows = $this->db()->execute(
+            'SELECT COUNT(*) FROM role_assignments WHERE role_id = ?',
+            [$this->roleId('super_administrator')],
+        )->fetch()[0];
+        $this->assertSame(3, (int)$rows);
+    }
+
+    public function testReopeningAnEndedAssignmentIsRefusedAtTheLimit(): void
+    {
+        $three = $this->createUser('three', null);
+        $this->assignRole($three, 'super_administrator', null, -60, -30);
+        $this->assign($this->createUser('one', null), 'super_administrator', null);
+        $this->assign($this->createUser('two', null), 'super_administrator', null);
+
+        $this->expectException(PDOException::class);
+        $this->db()->execute('UPDATE role_assignments SET ends_on = NULL WHERE user_id = ?', [$three]);
     }
 
     public function testOtherRolesAreNotLimited(): void

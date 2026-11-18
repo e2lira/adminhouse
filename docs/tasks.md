@@ -186,3 +186,5 @@
 | REBUILD-003-F5 | Slice 3 review suggestions: atomic failure counter for parallel verify requests; avoid storing raw submitted usernames on failed password (may contain a pasted password); audit deactivated user abandoning the second step. | TODO | build | Claude | 2026-11-18 |
 
 | REBUILD-003-F6 | Decide whether the max-two super-administrator rule should count only assignments in force (today it counts ended ones, so freeing a slot means deleting history). | TODO | decision | User | 2026-11-18 |
+
+| REBUILD-003-F6 | Done 2026-11-18: limit counts only non-ended super_administrator assignments (user decision). | DONE | build | Claude | 2026-11-18 |
