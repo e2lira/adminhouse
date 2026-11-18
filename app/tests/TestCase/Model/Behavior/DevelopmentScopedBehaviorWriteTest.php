@@ -8,6 +8,7 @@ use App\Authorization\DevelopmentScopeStack;
 use App\Model\Exception\DevelopmentScopeViolation;
 use App\Model\Exception\MissingDevelopmentScopeException;
 use App\Test\Support\ScopedTableTestCase;
+use Cake\Database\Exception\QueryException;
 use Cake\Event\EventInterface;
 use Cake\ORM\RulesChecker;
 use PDOException;
@@ -239,5 +240,123 @@ class DevelopmentScopedBehaviorWriteTest extends ScopedTableTestCase
         $errors = $entity->getError('section_id');
         $this->assertArrayHasKey('_existsIn', $errors);
         $this->assertStringNotContainsString('9', $errors['_existsIn']);
+    }
+
+    public function testAViolationInsideANestedChildSaveIsNotAttributedToTheParent(): void
+    {
+        $item = $this->items->newEntity(
+            ['name' => 'parent', 'notes' => [['body' => 'same'], ['body' => 'same']]],
+            ['associated' => ['ScopedNotes']] + $this->saveIn(1),
+        );
+
+        try {
+            $this->items->save($item, ['associated' => ['ScopedNotes']] + $this->saveIn(1));
+            $this->fail('A violation raised by a child save must reach the caller.');
+        } catch (QueryException) {
+            $this->assertSame([], $item->getErrors());
+            $this->assertNull($this->storedDevelopmentOf('parent'));
+        }
+    }
+
+    public function testSaveManyRethrowsAViolationAndLeavesTheConnectionUsable(): void
+    {
+        $this->insertItem(1, 'taken');
+        $entities = $this->items->newEntities([['name' => 'fresh'], ['name' => 'taken']]);
+
+        try {
+            $this->items->saveMany($entities, $this->saveIn(1));
+            $this->fail('A violation inside saveMany must not be hidden as a field error.');
+        } catch (QueryException) {
+            $this->assertSame([], $entities[1]->getErrors());
+        }
+
+        $this->assertNull($this->storedDevelopmentOf('fresh'));
+        $this->assertFalse($this->appDb()->inTransaction());
+        $this->assertSame(1, (int)$this->appDb()->execute('SELECT 1')->fetch()[0]);
+    }
+
+    public function testSaveManyWithSavepointsFlagsTheEntityThatViolatedAndRollsEverythingBack(): void
+    {
+        $this->insertItem(1, 'taken');
+        $entities = $this->items->newEntities([['name' => 'fresh'], ['name' => 'taken']]);
+        $this->appDb()->enableSavePoints(true);
+
+        try {
+            $this->assertFalse($this->items->saveMany($entities, $this->saveIn(1)));
+            $this->assertArrayHasKey('_unique', $entities[1]->getError('name'));
+            $this->assertSame([], $entities[0]->getErrors());
+        } finally {
+            $this->appDb()->disableSavePoints();
+        }
+
+        $this->assertNull($this->storedDevelopmentOf('fresh'));
+        $this->assertSame(1, (int)$this->appDb()->execute('SELECT 1')->fetch()[0]);
+    }
+
+    public function testACallerTransactionWithoutSavepointsGetsTheViolationRethrown(): void
+    {
+        $this->insertItem(1, 'taken');
+        $entity = $this->items->newEntity(['name' => 'taken']);
+
+        $this->appDb()->begin();
+        try {
+            $this->items->save($entity, $this->saveIn(1));
+            $this->fail('Converting here would leave the caller with an aborted transaction.');
+        } catch (QueryException) {
+            $this->assertSame([], $entity->getErrors());
+        } finally {
+            $this->appDb()->rollback();
+        }
+    }
+
+    public function testACallerTransactionWithSavepointsKeepsWorkingAfterAConvertedViolation(): void
+    {
+        $this->insertItem(1, 'taken');
+        $entity = $this->items->newEntity(['name' => 'taken']);
+
+        $this->appDb()->enableSavePoints(true);
+        $this->appDb()->begin();
+        try {
+            $this->assertFalse($this->items->save($entity, $this->saveIn(1)));
+            $this->assertArrayHasKey('_unique', $entity->getError('name'));
+            $this->assertSame(1, (int)$this->appDb()->execute('SELECT 1')->fetch()[0]);
+            $this->assertNotFalse($this->items->save($this->items->newEntity(['name' => 'after']), $this->saveIn(1)));
+        } finally {
+            $this->appDb()->rollback();
+            $this->appDb()->disableSavePoints();
+        }
+    }
+
+    public function testAnInnerScopeMayNarrowTheOperationScopeButNeverWidenIt(): void
+    {
+        $outcome = [];
+        $this->items->getEventManager()->on('Model.beforeSave', function () use (&$outcome): void {
+            $wider = $this->notes->newEntity(['body' => 'wide', 'item_id' => 1], ['developmentId' => 1]);
+            try {
+                $this->notes->save($wider, [
+                    'developmentScope' => DevelopmentScope::only([1, 2]),
+                    'developmentId' => 2,
+                    'associated' => false,
+                    'atomic' => false,
+                ]);
+                $outcome['wider'] = 'saved';
+            } catch (DevelopmentScopeViolation) {
+                $outcome['wider'] = 'refused';
+            }
+        });
+
+        $this->items->save($this->items->newEntity(['name' => 'outer']), $this->saveIn(1));
+
+        $this->assertSame('refused', $outcome['wider']);
+    }
+
+    public function testAnExpressionIndexViolationIsFlaggedWithoutNamingAColumn(): void
+    {
+        $this->db()->execute('CREATE UNIQUE INDEX scoped_items_lower_name ON scoped_items (development_id, lower(name))');
+        $this->insertItem(1, 'taken');
+        $entity = $this->items->newEntity(['name' => 'TAKEN']);
+
+        $this->assertFalse($this->items->save($entity, $this->saveIn(1)));
+        $this->assertArrayHasKey('_unique', $entity->getError('_constraint'));
     }
 }
