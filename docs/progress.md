@@ -128,3 +128,5 @@
 - [2026-11-17] REBUILD-002 done: CakePHP 5.4.4 skeleton in `app/` on PostgreSQL 18, tests and coding standard green. Next: REBUILD-003 (identity, TOTP and RBAC with development scoping), test-first.
 
 - [2026-11-17] REBUILD-003 slice 1 verified: identity schema, role catalogue and password sign-in in `app/` (41 tests green). Next: slice 2 (permissions, development scoping, default deny).
+
+- [2026-11-18] REBUILD-003 slice 1 committed (`bd62a64`); slice 2 verified (82 tests green): permissions, development scope, default deny, per-request user reload. Next: confirm the role matrix, commit, then slice 3 (TOTP).

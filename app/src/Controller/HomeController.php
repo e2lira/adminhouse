@@ -13,6 +13,9 @@ class HomeController extends AppController
      */
     public function index(): void
     {
+        // The page only shows the caller's own username; every signed-in user may open it.
+        $this->Authorization->skipAuthorization();
+
         $identity = $this->Authentication->getIdentity();
         $this->set('username', (string)$identity?->get('username'));
     }

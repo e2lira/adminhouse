@@ -21,6 +21,12 @@ return [
     'debug' => filter_var(env('DEBUG', true), FILTER_VALIDATE_BOOLEAN),
 
     /*
+     * Cookies (session and CSRF) are sent with the Secure flag, so browsers only return them over https.
+     * For local development over plain http set the environment variable COOKIE_SECURE=false; never do it in
+     * production. The default is true. (Read in config/app.php.)
+     */
+
+    /*
      * Security and encryption configuration
      *
      * - salt - A random string used in security hashing methods.
@@ -73,7 +79,7 @@ return [
             'password' => 'secret',
             'database' => 'test_myapp',
             //'schema' => 'myapp',
-            'url' => env('DATABASE_TEST_URL', 'sqlite://127.0.0.1/tmp/tests.sqlite'),
+            'url' => env('DATABASE_TEST_URL', 'postgres://my_app:secret@localhost/test_myapp'),
         ],
     ],
 

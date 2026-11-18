@@ -7,6 +7,9 @@ use Cake\Log\Engine\FileLog;
 use Cake\Mailer\Transport\MailTransport;
 use function Cake\Core\env;
 
+// Cookies carry the Secure flag unless COOKIE_SECURE=false (plain-http local development only).
+$cookieSecure = filter_var(env('COOKIE_SECURE', true), FILTER_VALIDATE_BOOLEAN);
+
 return [
     /*
      * Debug Level:
@@ -51,6 +54,7 @@ return [
      */
     'App' => [
         'namespace' => 'App',
+        'cookieSecure' => $cookieSecure,
         'encoding' => env('APP_ENCODING', 'UTF-8'),
         'defaultLocale' => env('APP_DEFAULT_LOCALE', 'en_US'),
         'defaultTimezone' => env('APP_DEFAULT_TIMEZONE', 'UTC'),
@@ -418,6 +422,12 @@ return [
      */
     'Session' => [
         'defaults' => 'php',
+        'ini' => [
+            'session.cookie_httponly' => 1,
+            'session.cookie_samesite' => 'Lax',
+            // Same switch as the CSRF cookie (App.cookieSecure).
+            'session.cookie_secure' => $cookieSecure ? 1 : 0,
+        ],
     ],
 
     /**

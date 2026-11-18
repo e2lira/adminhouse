@@ -29,7 +29,7 @@ class CreateRoleAssignments extends BaseMigration
         // development_id IS NULL if and only if the role is super_administrator. A CHECK constraint cannot
         // read another table, so a trigger enforces the rule on every insert and update.
         $this->execute(<<<'SQL'
-            CREATE FUNCTION role_assignments_enforce_scope() RETURNS trigger
+            CREATE OR REPLACE FUNCTION role_assignments_enforce_scope() RETURNS trigger
             LANGUAGE plpgsql AS $$
             DECLARE
                 is_super boolean;

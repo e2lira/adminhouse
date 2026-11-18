@@ -34,7 +34,7 @@ class CreateRolesAndPermissions extends BaseMigration
 
         // The role catalogue is fixed (RB-R2); the code identifies a role and must never change.
         $this->execute(<<<'SQL'
-            CREATE FUNCTION roles_forbid_code_change() RETURNS trigger
+            CREATE OR REPLACE FUNCTION roles_forbid_code_change() RETURNS trigger
             LANGUAGE plpgsql AS $$
             BEGIN
                 IF NEW.code IS DISTINCT FROM OLD.code THEN

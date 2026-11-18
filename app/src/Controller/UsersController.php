@@ -20,6 +20,10 @@ class UsersController extends AppController
         parent::beforeFilter($event);
 
         $this->Authentication->allowUnauthenticated(['login']);
+
+        // Sign-in and sign-out act on the caller's own session and expose no development data, so there is
+        // nothing to authorize against a permission.
+        $this->Authorization->skipAuthorization();
     }
 
     /**

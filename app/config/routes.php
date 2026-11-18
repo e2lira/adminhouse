@@ -54,5 +54,6 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/', ['controller' => 'Home', 'action' => 'index']);
         $builder->connect('/login', ['controller' => 'Users', 'action' => 'login']);
         $builder->connect('/logout', ['controller' => 'Users', 'action' => 'logout']);
+        $builder->connect('/developments', ['controller' => 'Developments', 'action' => 'index', '_method' => 'GET']);
     });
 };

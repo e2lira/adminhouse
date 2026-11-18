@@ -33,6 +33,13 @@ abstract class DatabaseTestCase extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Never truncate anything but a database that is explicitly a test database.
+        $database = (string)($this->db()->config()['database'] ?? '');
+        if (!str_contains($database, 'test')) {
+            $this->fail(sprintf('Refusing to truncate `%s`: the test database name must contain "test".', $database));
+        }
+
         $this->db()->execute(
             'TRUNCATE ' . implode(', ', self::TEST_DATA_TABLES) . ' RESTART IDENTITY CASCADE',
         );
@@ -84,6 +91,45 @@ abstract class DatabaseTestCase extends TestCase
         );
 
         return (int)$this->db()->execute('SELECT id FROM developments WHERE name = ?', [$name])->fetch()[0];
+    }
+
+    /**
+     * Give a user a role. Dates are offsets in days from today.
+     *
+     * @param int $userId User id.
+     * @param string $roleCode Role code.
+     * @param int|null $developmentId Development id; null only for super_administrator.
+     * @param int $startsInDays Offset of `starts_on` from today.
+     * @param int|null $endsInDays Offset of `ends_on` from today, or null for an open assignment.
+     * @param bool $readOnly Whether the assignment is read-only.
+     * @return void
+     */
+    protected function assignRole(
+        int $userId,
+        string $roleCode,
+        ?int $developmentId,
+        int $startsInDays = -30,
+        ?int $endsInDays = null,
+        bool $readOnly = false,
+    ): void {
+        $day = static fn(?int $offset): ?string => $offset === null
+            ? null
+            : date('Y-m-d', strtotime(sprintf('%+d days', $offset)));
+
+        $this->db()->execute(
+            'INSERT INTO role_assignments
+                (user_id, role_id, development_id, starts_on, ends_on, read_only, created, modified)
+             VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())',
+            [
+                $userId,
+                $this->roleId($roleCode),
+                $developmentId,
+                $day($startsInDays),
+                $day($endsInDays),
+                $readOnly,
+            ],
+            ['integer', 'integer', 'integer', 'string', 'string', 'boolean'],
+        );
     }
 
     protected function roleId(string $code): int

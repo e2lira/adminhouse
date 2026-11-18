@@ -170,3 +170,13 @@
 | REBUILD-003-F1 | `create_user` echoes the password on Windows consoles (hidden input only on Unix ttys). Fix before creating real accounts on Windows. | TODO | build | Claude | 2026-11-17 |
 
 | REBUILD-003-F2 | A user disabled while signed in keeps the session; re-check user status (and later role assignments) on each request. Planned in slice 2. | TODO | build | Claude | 2026-11-17 |
+
+| REBUILD-003a | Slice 1 committed locally as `bd62a64` (2026-11-18). | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003b | Slice 2 done 2026-11-18: permission catalogue, AccessControl scope, authorization plugin with default deny, `/developments`, cookie hardening. Not committed; role matrix awaiting user confirmation. | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F2 | Done in slice 2: user reloaded on every request; disabled or deleted users are signed out. | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F3 | Static check that every routed action performs an authorization check (AC-RB-1); runtime check only fires after the action body. | TODO | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F4 | Role assignment date window uses `Date::today()` in `App.defaultTimezone` (UTC): in Mexico an assignment ending today stops granting around 18:00 local. Decide business timezone (per development or America/Mexico_City) and compute today with it. | TODO | build | Claude | 2026-11-18 |

@@ -46,6 +46,10 @@ class AppController extends Controller
         // Every action requires a signed-in user unless it opts out with allowUnauthenticated().
         $this->loadComponent('Authentication.Authentication');
 
+        // Default deny (RB-R6): AuthorizationMiddleware fails any request whose action neither authorizes
+        // through this component nor opts out with skipAuthorization() (and says why).
+        $this->loadComponent('Authorization.Authorization');
+
         /*
          * Enable the following component for recommended CakePHP form protection settings.
          * see https://book.cakephp.org/5/en/controllers/components/form-protection.html

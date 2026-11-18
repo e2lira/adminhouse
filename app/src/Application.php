@@ -16,18 +16,26 @@ declare(strict_types=1);
  */
 namespace App;
 
+use App\Authentication\ActiveSessionAuthenticator;
+use App\Authentication\ActiveUserIdentifier;
 use App\Authentication\CredentialsIdentifier;
 use App\Middleware\HostHeaderMiddleware;
 use Authentication\AuthenticationService;
 use Authentication\AuthenticationServiceInterface;
 use Authentication\AuthenticationServiceProviderInterface;
 use Authentication\Middleware\AuthenticationMiddleware;
+use Authorization\AuthorizationService;
+use Authorization\AuthorizationServiceInterface;
+use Authorization\AuthorizationServiceProviderInterface;
+use Authorization\Middleware\AuthorizationMiddleware;
+use Authorization\Policy\OrmResolver;
 use Cake\Core\Configure;
 use Cake\Core\ContainerInterface;
 use Cake\Datasource\FactoryLocator;
 use Cake\Error\Middleware\ErrorHandlerMiddleware;
 use Cake\Event\EventManagerInterface;
 use Cake\Http\BaseApplication;
+use Cake\Http\Cookie\CookieInterface;
 use Cake\Http\Middleware\BodyParserMiddleware;
 use Cake\Http\Middleware\CsrfProtectionMiddleware;
 use Cake\Http\MiddlewareQueue;
@@ -45,7 +53,9 @@ use Psr\Http\Message\ServerRequestInterface;
  *
  * @extends \Cake\Http\BaseApplication<\App\Application>
  */
-class Application extends BaseApplication implements AuthenticationServiceProviderInterface
+class Application extends BaseApplication implements
+    AuthenticationServiceProviderInterface,
+    AuthorizationServiceProviderInterface
 {
     /**
      * Load all the application configuration and bootstrap logic.
@@ -102,11 +112,17 @@ class Application extends BaseApplication implements AuthenticationServiceProvid
             // https://book.cakephp.org/5/en/security/csrf.html#cross-site-request-forgery-csrf-middleware
             ->add(new CsrfProtectionMiddleware([
                 'httponly' => true,
+                'secure' => (bool)Configure::read('App.cookieSecure'),
+                'samesite' => CookieInterface::SAMESITE_LAX,
             ]))
 
             // Identifies the user for every request; the Authentication component in AppController
             // then refuses anonymous access to any action not explicitly opened.
-            ->add(new AuthenticationMiddleware($this));
+            ->add(new AuthenticationMiddleware($this))
+
+            // Default deny (RB-R6): after the action runs, a request that never authorized (or skipped
+            // explicitly) fails. Must stay after authentication: it decorates the identity.
+            ->add(new AuthorizationMiddleware($this, ['requireAuthorizationCheck' => true]));
 
         return $middlewareQueue;
     }
@@ -153,7 +169,12 @@ class Application extends BaseApplication implements AuthenticationServiceProvid
             'queryParam' => 'redirect',
         ]);
 
-        $service->loadAuthenticator('Authentication.Session', ['identifier' => CredentialsIdentifier::class]);
+        // The session holds only the user id; ActiveUserIdentifier reloads the user (and checks that the
+        // account is still active) on every request.
+        $service->loadAuthenticator(ActiveSessionAuthenticator::class, [
+            'identifier' => ActiveUserIdentifier::class,
+            'identifierKey' => ActiveUserIdentifier::CREDENTIAL_ID,
+        ]);
         $service->loadAuthenticator('Authentication.Form', [
             'identifier' => CredentialsIdentifier::class,
             'loginUrl' => $loginUrl,
@@ -161,5 +182,16 @@ class Application extends BaseApplication implements AuthenticationServiceProvid
         ]);
 
         return $service;
+    }
+
+    /**
+     * Policies are resolved from the ORM classes: App\Policy\<Alias>TablePolicy for a table or its queries.
+     *
+     * @param \Psr\Http\Message\ServerRequestInterface $request Request.
+     * @return \Authorization\AuthorizationServiceInterface
+     */
+    public function getAuthorizationService(ServerRequestInterface $request): AuthorizationServiceInterface
+    {
+        return new AuthorizationService(new OrmResolver());
     }
 }
