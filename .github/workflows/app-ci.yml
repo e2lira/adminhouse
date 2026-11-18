@@ -1,0 +1,76 @@
+name: app (CakePHP 5)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/app-ci.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - '.github/workflows/app-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+
+    services:
+      postgres:
+        image: postgres:18
+        # The superuser only provisions the roles; the app and the migrations connect as their own roles.
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_only_superuser_password
+          POSTGRES_DB: kualitet_app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Row-level security (RLS-SEC-001): the suite runs as the runtime role (kualitet_app, owns nothing) and
+      # migrates as the owner login (kualitet_owner, BYPASSRLS). Both are created by bin/provision_db_roles.php.
+      DATABASE_TEST_URL: postgres://kualitet_app:ci_only_app_password@127.0.0.1:5432/kualitet_app_test
+      DATABASE_TEST_MIGRATIONS_URL: postgres://kualitet_owner:ci_only_owner_password@127.0.0.1:5432/kualitet_app_test
+      SECURITY_SALT: ci-only-salt-not-used-anywhere-else-0123456789
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, pdo_pgsql
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Create local configuration
+        run: composer run-script post-install-cmd --no-interaction
+
+      - name: Provision database roles
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: ci_only_superuser_password
+          KUALITET_APP_PASSWORD: ci_only_app_password
+          KUALITET_OWNER_PASSWORD: ci_only_owner_password
+        run: php bin/provision_db_roles.php --database=kualitet_app_test
+
+      - name: Tests
+        run: vendor/bin/phpunit
+
+      - name: Coding standard
+        run: vendor/bin/phpcs

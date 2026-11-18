@@ -116,3 +116,23 @@
 - [2026-11-17] Full test suite green on SQLite memory: 363 tests, 0 errors, 0 failures, 299 incomplete placeholders.
 
 - [2026-11-17] SMTP passwords moved to `config/app_local.php` (not versioned). Local repository ready for a first commit; nothing committed or pushed. SMTP password rotation recommended.
+
+- [2026-11-17] No active production server (user). Repository published to GitHub by the user (`d5613b6`). Production-related tasks re-scoped.
+
+- [2026-11-17] ADR-0006 accepted: rebuild on CakePHP 5; ADR-0004 superseded. Next: decide the location of the new application (REBUILD-000), then the feature inventory (REBUILD-001).
+
+- [2026-11-17] Feature inventory drafted (REBUILD-001): 367 legacy actions classified; 46 need a user decision.
+
+- [2026-11-17] Feature inventory complete: 367 legacy actions, 0 open decisions. Next: REBUILD-002 (CakePHP 5 skeleton in `app/`).
+
+- [2026-11-17] REBUILD-002 done: CakePHP 5.4.4 skeleton in `app/` on PostgreSQL 18, tests and coding standard green. Next: REBUILD-003 (identity, TOTP and RBAC with development scoping), test-first.
+
+- [2026-11-17] REBUILD-003 slice 1 verified: identity schema, role catalogue and password sign-in in `app/` (41 tests green). Next: slice 2 (permissions, development scoping, default deny).
+
+- [2026-11-18] REBUILD-003 slice 1 committed (`bd62a64`); slice 2 verified (82 tests green): permissions, development scope, default deny, per-request user reload. Next: confirm the role matrix, commit, then slice 3 (TOTP).
+
+- [2026-11-18] REBUILD-003 slice 3 verified and committed locally: TOTP second factor for super-administrators (150 tests green). Next: slice 4 (role-assignment management screen).
+
+- [2026-11-18] REBUILD-003 slice 4 verified and committed locally: role-assignment management screen (223 tests green). Identity and RBAC slices 1 to 4 complete. Pending follow-ups: F1, F3, F4, F5, F7; RLS-SEC-001 before first deployment.
+
+- [2026-11-18] RLS-SEC-001 done and committed locally: PostgreSQL row-level security with three roles, definer functions, dedicated security review (407 tests green). Migrations now run with `bin/cake migrations migrate -c migrations`; new databases need `bin/provision_db_roles.php` first.

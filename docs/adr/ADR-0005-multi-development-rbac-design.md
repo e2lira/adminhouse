@@ -126,6 +126,8 @@ Ledger and process rules:
 
 ### 5. Sequencing within ADR-0004
 
+**Amended by ADR-0006 (2026-11-17):** there is no production server, so the user replaced the staged upgrade with a new CakePHP 5 application that implements this design from the start. The text below is kept for history.
+
 Confirmed by the user 2026-11-17 (G2 decision 3). The framework upgrade (stages 0 to 3) runs first on the current schema. This model is then introduced as a separate stage on 5.x with its own data migration and the rebuilt reports (CAKE5-REPORTS-001). The PostgreSQL production move (PG-PROD-001) happens before that stage, or as its first step, so row-level security ships with the new model; it never shares a release with a framework stage.
 
 ## Alternatives
@@ -191,3 +193,14 @@ All four G2 decisions are confirmed. G2 approved by the user on 2026-11-17 with 
 | `visitas` | `visits` | |
 | `supervision`, `areas` | `inspections`, `inspection_items` | |
 | `excel` | `files` | import history |
+
+## RLS-SEC-001 implementation notes (2026-11-18)
+
+Implemented in `app/` (migrations `20261119000001` to `20261119000003`) with three roles: `kualitet_app` (runtime, owns nothing, no `BYPASSRLS`), `kualitet_owner` (tables, migrations only, `NOLOGIN` in production after the migration window) and `kualitet_definer` (`NOLOGIN`, `BYPASSRLS`, owns every `SECURITY DEFINER` function and trigger function). A dedicated security review in two parts (database side and application side) was run before the first commit; its confirmed findings were fixed test-first.
+
+Accepted residual risks (layer 2 is a backstop against application bugs, not against an attacker who can run arbitrary SQL as the runtime role):
+
+1. **`app.user_id` is application trust.** The database cannot authenticate it; the application sets it only from the authenticated identity, inside the request transaction, with `set_config(..., true)`.
+2. **Job context is a database setting.** `app.context = 'job'` with `app.job_dev_ids` widens `dev_ids()` for scoped domain tables. No HTTP path sets it. Stronger option for later: a separate login role for jobs.
+3. **Pre-authentication functions take an explicit user id.** `auth_sign_in`, `auth_totp_*`, `auth_backup_code*`, `auth_rehash` and `auth_second_factor_required` run before an identity exists, so they cannot be bound to `app.user_id`. With SQL control an attacker could read a password hash or the encrypted TOTP secret (useless without the application key), or replace backup codes of a user. The application only calls them after the password check of the same sign-in.
+4. **Existence oracles.** `person_in_admin_scope` and `role_assignment_grantee_id` can confirm that ids or usernames exist; accepted for the role-assignment screen.

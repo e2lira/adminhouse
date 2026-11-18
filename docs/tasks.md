@@ -136,3 +136,69 @@
 | REPO-001 | First commit to `git@github.com:e2lira/adminhouse.git`: local repository initialized with `.gitignore` and remote; 953 files ready, no secret among them. Pending: user review of the file list, fresh-context review before commit (AGENTS rule), and explicit approval to commit and push; check whether the remote already has content. | TODO - user approval | repository | Claude | 2026-11-17 |
 
 | REPO-001 | Updated: first local commit `4793471` done (on top of remote `de284f1`). Pending: check whether the remote already has content, decide public or private visibility, rotate SMTP passwords, then push with explicit approval. | IN_PROGRESS - push pending | repository | Claude | 2026-11-17 |
+
+| PG-PROD-001 | Re-scoped 2026-11-17: no active production server. The first real deployment starts directly on PostgreSQL; no MariaDB data migration unless real data appears. | TODO (simplified) | planning | Claude | 2026-11-17 |
+
+| SECRETS-001 | Re-scoped 2026-11-17: no production server to configure. Still recommended: rotate the `gmail` and `alpa` SMTP passwords. | DONE (rotation recommended) | security | Claude | 2026-11-17 |
+
+| REPO-001 | Done 2026-11-17: `main` pushed by the user; remote verified at `d5613b6`. | DONE | repository | Claude | 2026-11-17 |
+
+| REBUILD-000 | Decide where the new CakePHP 5 application lives (same repository in a new directory, new repository, or replacing the legacy code). | TODO - user decision | planning | Claude | 2026-11-17 |
+
+| REBUILD-001 | Feature inventory (parity checklist) of the legacy application: every screen, action, report, email and file flow, classified as implement, redesign (with the ADR-0005 element) or retire. | TODO | planning | Claude | 2026-11-17 |
+
+| REBUILD-002 | New CakePHP 5 skeleton with PostgreSQL, test tooling (strict TDD), coding standards and CI basics. | TODO | build | Claude | 2026-11-17 |
+
+| REBUILD-003 | Module 1: identity, TOTP and RBAC (permissions, roles, assignments, policies, default deny) with development scoping. | TODO | build | Claude | 2026-11-17 |
+
+| ADR-0004 stages 1-3 | Cancelled by ADR-0006. | CANCELLED | n/a | Claude | 2026-11-17 |
+
+| SEC-001 / G3 (legacy) | No longer leads to a production release (ADR-0006). The `.DS_Store` HTTP check applies only if the legacy application is served again. | ON HOLD | legacy | Claude | 2026-11-17 |
+
+| REBUILD-000 | Done 2026-11-17: new application in `app/` within the same repository. | DONE | planning | Claude | 2026-11-17 |
+
+| REBUILD-001 | Draft done 2026-11-17: `docs/feature-inventory.md`. Pending user decisions: 11 controllers unreachable today, 5 probable dead stubs (including `Email::informeSeg`, whose saldo was ported on 2026-11-17), report list per module. | DRAFT - user review | planning | Claude | 2026-11-17 |
+
+| AZ-8 | Legacy reference: `Condominio::pa` and `Gasto::pa` print URL input unescaped (reflected XSS). Retired in the rebuild; make them `protected` only if the legacy app is served again. | NOTED | security | Claude | 2026-11-17 |
+
+| REBUILD-001 | Updated: all decisions taken (0 open). Remaining: report list per module, confirmed when the reports module starts. | DONE | planning | Claude | 2026-11-17 |
+
+| REBUILD-002 | Done 2026-11-17: CakePHP 5.4.4 skeleton in `app/` on PostgreSQL; tests and coding standard green; root CI workflow added (not yet run). | DONE | build | Claude | 2026-11-17 |
+
+| REBUILD-003a | Slice 1 done 2026-11-17: identity schema, fixed roles, password sign-in, `create_user` command. Not committed. | DONE | build | Claude | 2026-11-17 |
+
+| REBUILD-003-F1 | `create_user` echoes the password on Windows consoles (hidden input only on Unix ttys). Fix before creating real accounts on Windows. | TODO | build | Claude | 2026-11-17 |
+
+| REBUILD-003-F2 | A user disabled while signed in keeps the session; re-check user status (and later role assignments) on each request. Planned in slice 2. | TODO | build | Claude | 2026-11-17 |
+
+| REBUILD-003a | Slice 1 committed locally as `bd62a64` (2026-11-18). | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003b | Slice 2 done 2026-11-18: permission catalogue, AccessControl scope, authorization plugin with default deny, `/developments`, cookie hardening. Not committed; role matrix awaiting user confirmation. | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F2 | Done in slice 2: user reloaded on every request; disabled or deleted users are signed out. | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F3 | Static check that every routed action performs an authorization check (AC-RB-1); runtime check only fires after the action body. | TODO | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F4 | Role assignment date window uses `Date::today()` in `App.defaultTimezone` (UTC): in Mexico an assignment ending today stops granting around 18:00 local. Decide business timezone (per development or America/Mexico_City) and compute today with it. | TODO | build | Claude | 2026-11-18 |
+
+| REBUILD-003c | Slice 3 done 2026-11-18: TOTP second factor with backup codes and sign-in audit; at most two super-administrators enforced in the database. | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F5 | Slice 3 review suggestions: atomic failure counter for parallel verify requests; avoid storing raw submitted usernames on failed password (may contain a pasted password); audit deactivated user abandoning the second step. | TODO | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F6 | Decide whether the max-two super-administrator rule should count only assignments in force (today it counts ended ones, so freeing a slot means deleting history). | TODO | decision | User | 2026-11-18 |
+
+| REBUILD-003-F6 | Done 2026-11-18: limit counts only non-ended super_administrator assignments (user decision). | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003d | Slice 4 done 2026-11-18: role-assignment management screen with escalation rules and append-only audit. REBUILD-003 slices 1 to 4 complete. | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F7 | Slice 4 review notes: lock the actor's own manage assignment during grant/end (race with concurrent revocation); consider rejecting backdated `starts_on` for non-super actors; optional guard against removing the last administrator of a development. | TODO | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F4 | Done 2026-11-18: business clock in central Mexico time for every "today" check, PHP and SQL. | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F1 | Done 2026-11-18: hidden password input on Windows (PowerShell secure read) and Unix (stty), failing closed. Manual console check pending. | DONE | build | Claude | 2026-11-18 |
+
+| REBUILD-003-F1 | Manual console check done 2026-11-18: input hidden in PowerShell (user confirmed). | DONE | build | Claude | 2026-11-18 |
+
+| RLS-SEC-001 | Done 2026-11-18: RLS layer implemented, dedicated security review done, policy suite passing against real PostgreSQL. Condition of ADR-0005 met for the tables that exist; each new module must add its tables with `RowLevelSecurity` helpers and policy tests. | DONE | build | Claude | 2026-11-18 |
+
+| RLS-002 | Future: separate login role for jobs (removes the job-context residual); webhook context and `record_gateway_payment`; `audit_log` in its own transaction; occupancies and guard projection policies. | TODO | build | Claude | 2026-11-18 |
