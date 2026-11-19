@@ -29,6 +29,7 @@ class RealmsTable extends Table
         $this->hasMany('ScopedItems', [
             'className' => ItemsTable::class,
             'foreignKey' => 'development_id',
+            'bindingKey' => 'id',
             'propertyName' => 'items',
         ]);
     }
