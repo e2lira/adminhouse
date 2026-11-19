@@ -150,9 +150,106 @@ class DevelopmentsTableTest extends DatabaseTestCase
             'name' => 'Residencial Nuevo',
             'section_label' => 'Torre',
             'number_label' => 'Departamento',
+            'timezone' => 'America/Mexico_City',
         ]);
 
         return $development;
+    }
+
+    /**
+     * @return array<string, mixed> A valid payload with every required field and none of the optional ones.
+     */
+    private static function validPayload(): array
+    {
+        return [
+            'type' => 'subdivision',
+            'name' => 'Fraccionamiento Sur',
+            'section_label' => 'Privada',
+            'number_label' => 'Casa',
+            'timezone' => 'America/Mexico_City',
+        ];
+    }
+
+    public function testTheFiveProfileFieldsMayBeLeftOutOrEmpty(): void
+    {
+        $omitted = $this->developments->newEntity(self::validPayload());
+        $empty = $this->developments->newEntity(self::validPayload() + [
+            'address' => '', 'phone' => '', 'rfc' => '', 'bank_name' => '', 'bank_account' => '',
+        ]);
+
+        $this->assertSame([], $omitted->getErrors());
+        $this->assertSame([], $empty->getErrors());
+    }
+
+    public function testTheProfileFieldsAreKeptWhenGiven(): void
+    {
+        $development = $this->developments->newEntity(self::validPayload() + [
+            'address' => 'Calle 1, Col. Centro',
+            'phone' => '555 0101',
+            'rfc' => 'ABC010101AB1',
+            'bank_name' => 'Banco Demo',
+            'bank_account' => '012345678901234567',
+        ]);
+
+        $this->assertSame([], $development->getErrors());
+        $this->assertSame('Calle 1, Col. Centro', $development->get('address'));
+        $this->assertSame('012345678901234567', $development->get('bank_account'));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function requiredFields(): array
+    {
+        return [
+            'type' => ['type'],
+            'name' => ['name'],
+            'section_label' => ['section_label'],
+            'number_label' => ['number_label'],
+            'timezone' => ['timezone'],
+        ];
+    }
+
+    #[DataProvider('requiredFields')]
+    public function testEachRequiredFieldIsRequiredAndCannotBeBlank(string $field): void
+    {
+        $payload = self::validPayload();
+        unset($payload[$field]);
+        $missing = $this->developments->newEntity($payload);
+        $blank = $this->developments->newEntity([$field => '  '] + self::validPayload());
+
+        $this->assertArrayHasKey($field, $missing->getErrors());
+        $this->assertArrayHasKey($field, $blank->getErrors());
+        $this->assertSame([$field], array_keys($missing->getErrors()));
+    }
+
+    public function testTheTypeMustBeCondominiumOrSubdivision(): void
+    {
+        $this->assertSame([], $this->developments->newEntity(['type' => 'condominium'] + self::validPayload())->getErrors());
+        $this->assertSame([], $this->developments->newEntity(['type' => 'subdivision'] + self::validPayload())->getErrors());
+        $this->assertArrayHasKey(
+            'type',
+            $this->developments->newEntity(['type' => 'tower'] + self::validPayload())->getErrors(),
+        );
+    }
+
+    public function testTheTimezoneMustBeAKnownZone(): void
+    {
+        $this->assertSame([], $this->developments->newEntity(['timezone' => 'America/Cancun'] + self::validPayload())->getErrors());
+        $this->assertArrayHasKey(
+            'timezone',
+            $this->developments->newEntity(['timezone' => 'Mars/Olympus'] + self::validPayload())->getErrors(),
+        );
+    }
+
+    public function testTheArchiveStateAndTheIdCannotBeMassAssigned(): void
+    {
+        $development = $this->developments->newEntity(self::validPayload() + [
+            'id' => 99, 'archived_at' => '2026-01-01 00:00:00',
+        ]);
+
+        $this->assertNull($development->get('archived_at'));
+        $this->assertNull($development->get('id'));
     }
 
     public function testASaveOfANewDevelopmentUnderASingleDevelopmentScopeIsRefused(): void
