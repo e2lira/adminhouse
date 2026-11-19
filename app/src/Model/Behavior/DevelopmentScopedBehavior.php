@@ -153,9 +153,39 @@ class DevelopmentScopedBehavior extends Behavior
     {
         $scope = $this->requireScope();
         $field = $this->writeField();
-        if ($field !== null && !$scope->allows((int)$entity->get($field))) {
+        if ($field !== null && ($this->primaryKeyChanged($entity) || !$scope->allows((int)$entity->get($field)))) {
             throw new DevelopmentScopeViolation();
         }
+    }
+
+    /**
+     * The statements of a single-row save or delete address the row by its primary key, so an existing entity whose
+     * key was changed would reach a row that was never read under the scope.
+     *
+     * @param \Cake\Datasource\EntityInterface $entity Entity.
+     * @return bool Whether the entity exists and one of its primary key columns is dirty.
+     */
+    private function primaryKeyChanged(EntityInterface $entity): bool
+    {
+        if ($entity->isNew()) {
+            return false;
+        }
+        foreach ((array)$this->table()->getPrimaryKey() as $column) {
+            if ($entity->isDirty($column)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return string|null The column the table guards on writes and statements; null for through-mode tables, which
+     *  have no development column.
+     */
+    public function guardedColumn(): ?string
+    {
+        return $this->writeField();
     }
 
     /**
@@ -177,7 +207,9 @@ class DevelopmentScopedBehavior extends Behavior
         }
 
         if (!$entity->isNew()) {
-            $outside = $entity->isDirty($field) || !$scope->allows((int)$entity->get($field));
+            $outside = $entity->isDirty($field)
+                || $this->primaryKeyChanged($entity)
+                || !$scope->allows((int)$entity->get($field));
         } elseif ($field === 'id') {
             // A development itself: only an all-development scope creates one.
             $outside = !$scope->isAll();

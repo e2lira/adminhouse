@@ -394,4 +394,35 @@ class DevelopmentScopedBehaviorWriteTest extends ScopedTableTestCase
             $this->assertSame([], $entity->getErrors());
         }
     }
+
+    public function testAnExistingEntityWhoseKeyChangedIsRefusedOnSave(): void
+    {
+        $mine = $this->items->get($this->insertItem(1, 'mine'), developmentScope: DevelopmentScope::only([1]));
+        $theirsId = $this->insertItem(2, 'theirs');
+        $mine->set('id', $theirsId);
+        $mine->set('name', 'hijacked');
+
+        try {
+            $this->items->save($mine, ['developmentScope' => DevelopmentScope::only([1])]);
+            $this->fail('A changed primary key must be refused.');
+        } catch (DevelopmentScopeViolation) {
+            $row = $this->appDb()->execute('SELECT name FROM scoped_items WHERE id = ?', [$theirsId])->fetch();
+            $this->assertSame('theirs', $row[0]);
+        }
+    }
+
+    public function testAnExistingEntityWhoseKeyChangedIsRefusedOnDelete(): void
+    {
+        $mine = $this->items->get($this->insertItem(1, 'mine'), developmentScope: DevelopmentScope::only([1]));
+        $theirsId = $this->insertItem(2, 'theirs');
+        $mine->set('id', $theirsId);
+
+        try {
+            $this->items->delete($mine, ['developmentScope' => DevelopmentScope::only([1])]);
+            $this->fail('A changed primary key must be refused.');
+        } catch (DevelopmentScopeViolation) {
+            $row = $this->appDb()->execute('SELECT name FROM scoped_items WHERE id = ?', [$theirsId])->fetch();
+            $this->assertSame('theirs', $row[0]);
+        }
+    }
 }
