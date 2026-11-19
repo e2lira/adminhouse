@@ -222,3 +222,5 @@
 | DU-2B-R1 | developments-units PR 2b review round 1 fixes (conditional archive transition, route-walk statuses, edit and id edge cases, W-E contract, note for 3a-i). | DONE (pending review) | build | Claude | 2026-11-19 |
 
 | DU-3A-I | developments-units PR 3a-i (`feat/du-3a-i-permission-dev-ids`): `permission_dev_ids`, managed-domain RLS helper, `units.manage` seed, resident `units.view` revoke, parity and matrix tests (openspec tasks 6.1 to 6.10). | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-3A-I-R1 | developments-units PR 3a-i review round 1 and user decision (read follows permission): two-code `managedDomainTable`, column contract, parity and clock tests, migration rollback test, design amendment A1. | DONE (pending review) | build | Claude | 2026-11-19 |
