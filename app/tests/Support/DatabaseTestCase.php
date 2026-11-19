@@ -8,6 +8,8 @@ use Authentication\PasswordHasher\DefaultPasswordHasher;
 use Cake\Database\Connection;
 use Cake\Datasource\ConnectionManager;
 use Cake\TestSuite\TestCase;
+use PDOException;
+use Throwable;
 
 /**
  * Base class for tests that need the migrated PostgreSQL schema.
@@ -35,6 +37,8 @@ abstract class DatabaseTestCase extends TestCase
         'role_assignments',
         'user_credentials',
         'users',
+        'units',
+        'sections',
         'person_developments',
         'people',
         'developments',
@@ -90,6 +94,30 @@ abstract class DatabaseTestCase extends TestCase
         $connection = ConnectionManager::get('default');
 
         return $connection;
+    }
+
+    /**
+     * Run a statement with the owner login and report how the database answered.
+     *
+     * @param string $sql Statement.
+     * @param list<mixed> $params Positional parameters.
+     * @return string|null SQLSTATE of the error, or null when the statement succeeded.
+     */
+    protected function ownerSqlState(string $sql, array $params = []): ?string
+    {
+        try {
+            $this->db()->execute($sql, $params)->fetchAll();
+
+            return null;
+        } catch (Throwable $e) {
+            for (; $e !== null; $e = $e->getPrevious()) {
+                if ($e instanceof PDOException && isset($e->errorInfo[0])) {
+                    return (string)$e->errorInfo[0];
+                }
+            }
+
+            return 'unknown';
+        }
     }
 
     /**
