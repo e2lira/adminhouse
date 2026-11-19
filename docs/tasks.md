@@ -226,3 +226,5 @@
 | DU-3A-I-R1 | developments-units PR 3a-i review round 1 and user decision (read follows permission): two-code `managedDomainTable`, column contract, parity and clock tests, migration rollback test, design amendment A1. | DONE (pending review) | build | Claude | 2026-11-19 |
 
 | DU-3A-I-R2 | developments-units PR 3a-i review round 2: write-implies-read tests and seed invariant, real UPDATE denial read-back, ORM id retrieval check, 3a-ii table contract notes, rollback test group. | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-3A-II | developments-units PR 3a-ii: sections and units schema, development-change trigger, managed RLS, per-actor RLS tests, migration rollback evidence (tasks 7.1 to 7.6). | DONE (pending review) | build | Claude | 2026-11-19 |

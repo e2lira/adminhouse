@@ -198,16 +198,18 @@ Notes from review of PR 3a-i (binding):
 - Write implies read: every role holding `units.manage` must also hold `units.view` (the seed invariant test enforces it).
 
 Tasks:
-- [ ] 7.1 RED: schema tests for `sections` (name non-blank check, `UNIQUE (development_id, id)`, `UNIQUE (development_id, name)`).
-- [ ] 7.2 RED: schema tests for `units`: number non-blank; type CHECK; `lot_area_m2 > 0`; `indiviso_pct > 0 AND <= 100`; `is_active` default true; composite FK `(development_id, section_id) -> sections`; `UNIQUE NULLS NOT DISTINCT (development_id, section_id, number)`; same number in different section/development accepted; foreign-development section rejected.
-- [ ] 7.3 RED: `forbid_development_id_change()` trigger tests (update of `development_id` rejected).
-- [ ] 7.4 GREEN: migration (up/down) creating both tables, trigger (function reusable by later tables), RLS via `managedDomainTable('sections'|'units', 'units.view', 'units.manage', [updatable columns incl. modified], ['created'])` (design A1: reads follow `units.view`).
-- [ ] 7.5 RED/GREEN: RLS tests per actor (super, adminA, dataEntryA, accountantA, resident, adminB, job) per command: SELECT scope (follows `units.view` through `permission_dev_ids`: adminA, dataEntryA, accountantA read; resident and guard hold an assignment but read nothing; design A1), INSERT/UPDATE allowed only adminA/dataEntryA/super, DELETE super only (adminA/dataEntryA delete removes no row), cross-development reads/writes see/change nothing, job read-only.
-- [ ] 7.6 Migration up/down/up; Docs.
+- [x] 7.1 RED: schema tests for `sections` (name non-blank check, `UNIQUE (development_id, id)`, `UNIQUE (development_id, name)`).
+- [x] 7.2 RED: schema tests for `units`: number non-blank; type CHECK; `lot_area_m2 > 0`; `indiviso_pct > 0 AND <= 100`; `is_active` default true; composite FK `(development_id, section_id) -> sections`; `UNIQUE NULLS NOT DISTINCT (development_id, section_id, number)`; same number in different section/development accepted; foreign-development section rejected.
+- [x] 7.3 RED: `forbid_development_id_change()` trigger tests (update of `development_id` rejected).
+- [x] 7.4 GREEN: migration (up/down) creating both tables, trigger (function reusable by later tables), RLS via `managedDomainTable('sections'|'units', 'units.view', 'units.manage', [updatable columns incl. modified], ['created'])` (design A1: reads follow `units.view`).
+- [x] 7.5 RED/GREEN: RLS tests per actor (super, adminA, dataEntryA, accountantA, resident, adminB, job) per command: SELECT scope (follows `units.view` through `permission_dev_ids`: adminA, dataEntryA, accountantA read; resident and guard hold an assignment but read nothing; design A1), INSERT/UPDATE allowed only adminA/dataEntryA/super, DELETE super only (adminA/dataEntryA delete removes no row), cross-development reads/writes see/change nothing, job read-only.
+- [x] 7.6 Migration up/down/up; Docs.
 
 Verification: phpunit (alone), phpcs, migrate/rollback/migrate.
 PR description: template; Database change: two tables, trigger, policies, grants.
 Rollback boundary: rollback migration (drops tables) then revert; no app code uses them yet.
+
+Implementation note (3a-ii): two migrations (`20261122000001_CreateSections`, `20261122000002_CreateUnits`) instead of one, so each table is its own work unit and rollback boundary. The trigger reuses the existing generic `public.forbid_development_id_change()` (from RLS-SEC-001); the new builder `Rls::forbidDevelopmentChange($table)` attaches it and `catalogTable` now uses the builder. `name`/`number` blank checks use `~ '\S'` rather than `btrim(...) <> ''` (the design sketch), because `btrim` keeps a tab or line break. `created` and `modified` are NOT NULL without defaults, as in the existing tables (the ORM sets them). Updatable columns: sections `name, modified`; units `section_id, number, type, lot_area_m2, indiviso_pct, is_active, modified`; insert-only `created`. Task 7.6 evidence is automated: `PermissionMigrationsRollbackTest` rolls both tables, their 8 policies and 2 triggers back and forward.
 
 ---
 
