@@ -18,6 +18,16 @@ use PHPUnit\Framework\Attributes\DataProvider;
 class RlsSectionsUnitsTest extends RlsTestCase
 {
     /**
+     * SQLSTATE of a policy violation or a missing privilege (insufficient_privilege).
+     */
+    private const DENIED = '42501';
+
+    /**
+     * Holds `units.view` but not `units.manage`; created here because only this test needs it.
+     */
+    private int $supervisorA;
+
+    /**
      * @return array<string, array{string}>
      */
     public static function tables(): array
@@ -48,10 +58,22 @@ class RlsSectionsUnitsTest extends RlsTestCase
         };
     }
 
+    private function insertWithIdSql(string $table): string
+    {
+        return match ($table) {
+            'sections' => 'INSERT INTO sections (id, development_id, name, created, modified)
+                           VALUES (999, ?, ?, NOW(), NOW())',
+            'units' => "INSERT INTO units (id, development_id, number, type, created, modified)
+                        VALUES (999, ?, ?, 'house', NOW(), NOW())",
+        };
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
 
+        $this->supervisorA = $this->createUser('supervisor_a', null);
+        $this->assignRole($this->supervisorA, 'supervisor', $this->devA);
         foreach ($this->tables() as [$table]) {
             foreach ([[$this->devA, 'a1'], [$this->devA, 'a2'], [$this->devB, 'b1']] as $params) {
                 $this->db()->execute($this->insertSql($table), $params);
@@ -141,7 +163,7 @@ class RlsSectionsUnitsTest extends RlsTestCase
     #[DataProvider('tables')]
     public function testReadsFollowTheUnitsViewPermission(string $table): void
     {
-        foreach (['adminA', 'accountantA', 'dataEntryA'] as $user) {
+        foreach (['adminA', 'accountantA', 'dataEntryA', 'supervisorA'] as $user) {
             $this->actAs($this->{$user});
             $this->assertSame(['a1', 'a2'], $this->labels($table), $user);
             $this->endSession();
@@ -194,7 +216,7 @@ class RlsSectionsUnitsTest extends RlsTestCase
             $this->actAs($this->{$user});
 
             $this->assertAllowed($this->insertSql($table), [$this->devA, 'new_' . $user]);
-            $this->assertRejected($this->insertSql($table), [$this->devB, 'new_' . $user]);
+            $this->assertSame(self::DENIED, $this->sqlStateOf($this->insertSql($table), [$this->devB, 'new_' . $user]));
             $this->assertAllowed($this->update($table, 'a1', 'a1'));
             $this->assertAllowed($this->update($table, 'a2', 'a2'));
             // B is invisible to them: the update matches nothing.
@@ -213,6 +235,7 @@ class RlsSectionsUnitsTest extends RlsTestCase
     {
         return [
             'accountant (reads, role lacks units.manage)' => ['accountantA'],
+            'supervisor (reads, role lacks units.manage)' => ['supervisorA'],
             'guard' => ['guardA'],
             'resident' => ['resident'],
             'administrator of the other development' => ['adminB'],
@@ -233,7 +256,7 @@ class RlsSectionsUnitsTest extends RlsTestCase
         foreach ($this->tables() as [$table]) {
             $this->actAs($this->{$user});
 
-            $this->assertRejected($this->insertSql($table), [$this->devA, 'new']);
+            $this->assertSame(self::DENIED, $this->sqlStateOf($this->insertSql($table), [$this->devA, 'new']));
             $this->assertSame(0, $this->attempt($this->update($table, 'a1', 'x')));
             $this->assertSame(0, $this->attempt("DELETE FROM {$table} WHERE development_id = {$this->devA}"));
             $this->assertRowsUntouched($table);
@@ -252,7 +275,7 @@ class RlsSectionsUnitsTest extends RlsTestCase
         $this->actAs($user);
 
         $this->assertSame(['a1', 'a2'], $this->labels($table));
-        $this->assertRejected($this->insertSql($table), [$this->devA, 'new']);
+        $this->assertSame(self::DENIED, $this->sqlStateOf($this->insertSql($table), [$this->devA, 'new']));
         $this->assertSame(0, $this->attempt($this->update($table, 'a1', 'x')));
         $this->assertSame(0, $this->attempt("DELETE FROM {$table}"));
         $this->assertRowsUntouched($table);
@@ -269,7 +292,7 @@ class RlsSectionsUnitsTest extends RlsTestCase
         $this->actAs($this->adminA);
 
         $this->assertSame(['a1', 'a2'], $this->labels($table));
-        $this->assertRejected($this->insertSql($table), [$this->devA, 'new']);
+        $this->assertSame(self::DENIED, $this->sqlStateOf($this->insertSql($table), [$this->devA, 'new']));
         $this->assertSame(0, $this->attempt($this->update($table, 'a1', 'x')));
         $this->assertRowsUntouched($table);
     }
@@ -328,6 +351,105 @@ class RlsSectionsUnitsTest extends RlsTestCase
         $this->assertSame('23505', $this->sqlStateOf($this->insertSql($table), [$this->devA, 'a1']));
     }
 
+    /**
+     * @return array<string, array{string, list<string>, list<string>}>
+     */
+    public static function writableColumns(): array
+    {
+        return [
+            'sections' => ['sections', ['name', 'modified'], ['development_id', 'created']],
+            'units' => [
+                'units',
+                ['section_id', 'number', 'type', 'lot_area_m2', 'indiviso_pct', 'is_active', 'modified'],
+                ['development_id', 'created'],
+            ],
+        ];
+    }
+
+    /**
+     * @param string $table Table.
+     * @param list<string> $updatable Columns the runtime role may update (and insert).
+     * @param list<string> $insertOnly Columns it may only set on insert (besides the updatable ones).
+     * @return void
+     */
+    #[DataProvider('writableColumns')]
+    public function testTheRuntimeRoleHoldsExactlyThePrivilegesOnEveryColumn(
+        string $table,
+        array $updatable,
+        array $insertOnly,
+    ): void {
+        $all = array_map(
+            static fn(array $row): string => $row[0],
+            $this->db()->execute(
+                'SELECT column_name FROM information_schema.columns WHERE table_name = ? ORDER BY ordinal_position',
+                [$table],
+            )->fetchAll(),
+        );
+        $privilege = fn(string $kind, string $column): bool => (bool)$this->db()->execute(
+            'SELECT has_column_privilege(?, ?, ?, ?)',
+            [RowLevelSecurity::ROLE_APP, $table, $column, $kind],
+        )->fetch()[0];
+
+        foreach ($all as $column) {
+            $this->assertSame(in_array($column, $updatable, true), $privilege('UPDATE', $column), 'UPDATE ' . $column);
+            $this->assertSame(
+                in_array($column, [...$updatable, ...$insertOnly], true),
+                $privilege('INSERT', $column),
+                'INSERT ' . $column,
+            );
+        }
+        $this->assertContains('modified', $updatable);
+        $this->assertSame([], array_diff([...$updatable, ...$insertOnly], $all), 'every granted column exists');
+    }
+
+    public function testStaffUpdateEveryUpdatableColumnOfAUnitAndASection(): void
+    {
+        foreach (['adminA', 'dataEntryA'] as $user) {
+            $this->actAs($this->{$user});
+
+            $this->assertSame(1, $this->attempt(
+                "UPDATE units SET section_id = NULL, number = 'a1', type = 'lot', lot_area_m2 = 10.5,
+                    indiviso_pct = 1.5, is_active = false, modified = NOW() WHERE number = 'a1'",
+            ), $user);
+            $this->assertSame(1, $this->attempt("UPDATE sections SET name = 'a1', modified = NOW() WHERE name = 'a1'"), $user);
+            $this->commitSession();
+
+            $row = $this->db()->execute(
+                "SELECT type, lot_area_m2::text, indiviso_pct::text, is_active FROM units WHERE number = 'a1'",
+            )->fetch();
+            $this->assertSame(['lot', '10.50', '1.5000', false], [$row[0], $row[1], $row[2], (bool)$row[3]], $user);
+            $this->db()->execute("UPDATE units SET type = 'house', lot_area_m2 = NULL, indiviso_pct = NULL, is_active = true");
+        }
+    }
+
+    /**
+     * @param string $table Table.
+     * @return void
+     */
+    #[DataProvider('tables')]
+    public function testAJobAndAnAnonymousRequestCannotInsertUpdateOrDelete(string $table): void
+    {
+        $sessions = [
+            'job' => fn() => $this->actAsJob([$this->devA, $this->devB]),
+            'anonymous' => fn() => $this->actAs(null),
+        ];
+        foreach ($sessions as $name => $start) {
+            $start();
+
+            foreach ([$this->devA, $this->devB] as $development) {
+                $this->assertSame(
+                    self::DENIED,
+                    $this->sqlStateOf($this->insertSql($table), [$development, 'new']),
+                    $name,
+                );
+            }
+            $this->assertSame(0, $this->attempt($this->update($table, 'a1', 'x')), $name);
+            $this->assertSame(0, $this->attempt($this->update($table, 'b1', 'x')), $name);
+            $this->assertSame(0, $this->attempt("DELETE FROM {$table}"), $name);
+            $this->assertRowsUntouched($table);
+        }
+    }
+
     public function testAUnitCannotPointAtASectionOfAnotherDevelopmentAndTheAnswerHidesWhetherItExists(): void
     {
         $own = (int)$this->db()->execute(
@@ -366,13 +488,12 @@ class RlsSectionsUnitsTest extends RlsTestCase
         foreach (['adminA', 'superUser'] as $user) {
             $this->actAs($this->{$user});
 
-            $this->assertRejected("UPDATE {$table} SET development_id = ? WHERE {$column} = 'a1'", [$this->devB]);
-            $this->assertRejected("UPDATE {$table} SET id = id + 100 WHERE {$column} = 'a1'");
-            $this->assertRejected("UPDATE {$table} SET created = NOW() WHERE {$column} = 'a1'");
-            $this->assertRejected(
-                "INSERT INTO {$table} (id, development_id, {$column}, created, modified) VALUES (999, ?, 'x', NOW(), NOW())",
-                [$this->devA],
-            );
+            $denied = fn(string $sql, array $params = []) => $this->assertSame(self::DENIED, $this->sqlStateOf($sql, $params));
+            $denied("UPDATE {$table} SET development_id = ? WHERE {$column} = 'a1'", [$this->devB]);
+            $denied("UPDATE {$table} SET id = id + 100 WHERE {$column} = 'a1'");
+            $denied("UPDATE {$table} SET created = NOW() WHERE {$column} = 'a1'");
+            // The statement is complete (type included), so only the column privilege on `id` can refuse it.
+            $denied($this->insertWithIdSql($table), [$this->devA, 'x']);
             $this->assertRowsUntouched($table);
         }
     }

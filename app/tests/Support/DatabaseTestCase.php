@@ -37,6 +37,8 @@ abstract class DatabaseTestCase extends TestCase
         'role_assignments',
         'user_credentials',
         'users',
+        'units',
+        'sections',
         'person_developments',
         'people',
         'developments',
