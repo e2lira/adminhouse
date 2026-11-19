@@ -151,13 +151,15 @@ class AccessControlTest extends DatabaseTestCase
     {
         return [
             'administrator' => ['administrator', [
-                'developments.view', 'payments.create', 'reports.view', 'role_assignments.manage', 'units.view',
+                'developments.view', 'payments.create', 'reports.view', 'role_assignments.manage', 'units.manage',
+                'units.view',
             ]],
             'accountant' => ['accountant', ['developments.view', 'payments.create', 'reports.view', 'units.view']],
-            'data_entry' => ['data_entry', ['developments.view', 'payments.create', 'units.view']],
+            'data_entry' => ['data_entry', ['developments.view', 'payments.create', 'units.manage', 'units.view']],
             'supervisor' => ['supervisor', ['developments.view', 'reports.view', 'units.view']],
             'guard' => ['guard', ['gate.log']],
-            'resident' => ['resident', ['units.view']],
+            // AD13: a resident has no development-wide unit access until the resident sub-scope exists (D7).
+            'resident' => ['resident', []],
         ];
     }
 
@@ -177,6 +179,71 @@ class AccessControlTest extends DatabaseTestCase
         )->fetchAll('assoc');
 
         $this->assertSame($expected, array_column($rows, 'code'));
+    }
+
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function unitsManageByRole(): array
+    {
+        return [
+            'administrator' => ['administrator', true],
+            'data_entry' => ['data_entry', true],
+            'accountant' => ['accountant', false],
+            'supervisor' => ['supervisor', false],
+            'guard' => ['guard', false],
+            'resident' => ['resident', false],
+        ];
+    }
+
+    /**
+     * @param string $role Role code.
+     * @param bool $holds Whether the role may manage units.
+     * @return void
+     */
+    #[DataProvider('unitsManageByRole')]
+    public function testUnitsManageIsHeldByAdministratorAndDataEntryOnly(string $role, bool $holds): void
+    {
+        $dev = $this->createDevelopment('A');
+        $other = $this->createDevelopment('B');
+        $user = $this->createUser('u_' . $role);
+        $this->assignRole($user, $role, $dev);
+
+        $scope = $this->access->allowedFor($user, 'units.manage');
+
+        $this->assertSame($holds ? [$dev] : [], $scope->ids());
+        $this->assertFalse($scope->allows($other));
+    }
+
+    public function testUnitsManageNeedsAWritableAssignment(): void
+    {
+        $dev = $this->createDevelopment('A');
+        $user = $this->createUser('observer');
+        $this->assignRole($user, 'administrator', $dev, -30, null, true);
+
+        $this->assertTrue($this->access->allowedFor($user, 'units.manage')->isEmpty());
+        // The control: the same read-only assignment still reads units through its other role permissions.
+        $this->assertSame([$dev], $this->access->allowedFor($user, 'units.view')->ids());
+    }
+
+    public function testAResidentOnlyUserIsRefusedEveryUnitPermission(): void
+    {
+        $dev = $this->createDevelopment('A');
+        $user = $this->createUser('tenant');
+        $this->assignRole($user, 'resident', $dev);
+
+        $this->assertTrue($this->access->allowedFor($user, 'units.view')->isEmpty());
+        $this->assertTrue($this->access->allowedFor($user, 'units.manage')->isEmpty());
+    }
+
+    public function testAResidentWhoAlsoHoldsAStaffRoleKeepsTheStaffAccess(): void
+    {
+        $dev = $this->createDevelopment('A');
+        $user = $this->createUser('tenant_clerk');
+        $this->assignRole($user, 'resident', $dev);
+        $this->assignRole($user, 'data_entry', $dev);
+
+        $this->assertSame([$dev], $this->access->allowedFor($user, 'units.view')->ids());
     }
 
     public function testNoRoleHoldsDevelopmentsManageAndOnlyTheSuperAdministratorIsGrantedIt(): void

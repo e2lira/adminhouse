@@ -165,6 +165,48 @@ class DevelopmentArchivedWritesPolicyTest extends DatabaseTestCase
         $this->assertFalse($policy->{$ability}($this->identity($root), $archived));
     }
 
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function realUnitsManageHolders(): array
+    {
+        return [
+            'administrator' => ['administrator', true],
+            'data_entry' => ['data_entry', true],
+            'accountant' => ['accountant', false],
+            'resident' => ['resident', false],
+        ];
+    }
+
+    /**
+     * The seeded `units.manage` rows decide, not a stub: holders are allowed on an unarchived development and refused
+     * on an archived one (the entity is read in full, as the call sites must).
+     *
+     * @param string $role Role code.
+     * @param bool $holds Whether the role holds `units.manage`.
+     * @return void
+     */
+    #[DataProvider('realUnitsManageHolders')]
+    public function testSeededUnitsManageHoldersAreAllowedOnAnUnarchivedDevelopmentAndRefusedOnAnArchivedOne(
+        string $role,
+        bool $holds,
+    ): void {
+        $dev = $this->createDevelopment('A');
+        $user = $this->createUser('u_' . $role);
+        $this->assignRole($user, $role, $dev);
+        $policy = new DevelopmentPolicy(access: new ActingAccessControl());
+        $identity = $this->identity($user);
+
+        $open = new Development(['id' => $dev, 'archived_at' => null]);
+        $open->clean();
+        $this->assertSame($holds, $policy->canManageUnits($identity, $open), $role);
+
+        $this->db()->execute('UPDATE developments SET archived_at = NOW() WHERE id = ?', [$dev]);
+        $archived = new Development(['id' => $dev, 'archived_at' => DateTime::now()]);
+        $archived->clean();
+        $this->assertFalse($policy->canManageUnits($identity, $archived), $role);
+    }
+
     #[DataProvider('abilities')]
     public function testAHiddenArchiveFieldStillCountsAsLoaded(string $ability): void
     {

@@ -44,7 +44,9 @@ class SeedPermissionCatalogue extends BaseMigration
         'supervisor' => ['developments.view', 'units.view', 'reports.view'],
         // RB-R7, AC-RB-5: a guard reaches only gate functions.
         'guard' => ['gate.log'],
-        // RB-R8: a resident reaches only their own units (row-level rule comes with the units module).
+        // RB-R8: a resident reaches only their own units. The row-level rule for that does not exist yet, so
+        // migration 20261121000003 revokes this row (AD13, user-confirmed 2026-11-18) until the resident sub-scope
+        // ships in the deferred lifecycle change. This file stays as shipped so a rollback restores it.
         'resident' => ['units.view'],
     ];
 

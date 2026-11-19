@@ -74,6 +74,42 @@ class RlsPermissionDevIdsTest extends RlsTestCase
         $this->assertSame($this->resolve($expected), $this->permissionDevIds('reports.view'));
     }
 
+    /**
+     * @return array<string, array{string, list<string>}>
+     */
+    public static function unitsManageHolders(): array
+    {
+        return [
+            'administrator of A' => ['adminA', ['A']],
+            'data entry of A' => ['dataEntryA', ['A']],
+            'administrator of B' => ['adminB', ['B']],
+            'accountant of A (role lacks the code)' => ['accountantA', []],
+            'guard of A (role lacks the code)' => ['guardA', []],
+            'resident of A (role lacks the code)' => ['resident', []],
+        ];
+    }
+
+    /**
+     * @param string $user Property holding the user id.
+     * @param list<string> $expected Developments expected.
+     * @return void
+     */
+    #[DataProvider('unitsManageHolders')]
+    public function testUnitsManageFollowsTheSeededRoleRows(string $user, array $expected): void
+    {
+        $this->actAs($this->{$user});
+
+        $this->assertSame($this->resolve($expected), $this->permissionDevIds('units.manage'));
+    }
+
+    public function testUnitsManageLeavesAnArchivedDevelopment(): void
+    {
+        $this->db()->execute('UPDATE developments SET archived_at = NOW() WHERE id = ?', [$this->devA]);
+        $this->actAs($this->dataEntryA);
+
+        $this->assertSame([], $this->permissionDevIds('units.manage'));
+    }
+
     public function testAReadOnlyAssignmentKeepsReadCodesAndLosesWriteCodes(): void
     {
         $user = $this->createUser('observer', null);
