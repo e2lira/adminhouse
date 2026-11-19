@@ -23,9 +23,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
 class DevelopmentArchivedWritesPolicyTest extends DatabaseTestCase
 {
     private const PERMISSIONS = [
-        'canManageUnits' => 'units.manage',
-        'canManagePeople' => 'people.manage',
-        'canManageOccupancies' => 'occupancies.manage',
+        'canManageUnits' => DevelopmentPolicy::UNITS_MANAGE,
+        'canManagePeople' => DevelopmentPolicy::PEOPLE_MANAGE,
+        'canManageOccupancies' => DevelopmentPolicy::OCCUPANCIES_MANAGE,
     ];
 
     /**
@@ -163,5 +163,27 @@ class DevelopmentArchivedWritesPolicyTest extends DatabaseTestCase
 
         $this->assertTrue($policy->{$ability}($this->identity($root), $open));
         $this->assertFalse($policy->{$ability}($this->identity($root), $archived));
+    }
+
+    #[DataProvider('abilities')]
+    public function testAHiddenArchiveFieldStillCountsAsLoaded(string $ability): void
+    {
+        $policy = new DevelopmentPolicy(access: $this->access(true));
+        $open = $this->development(false)->setHidden(['archived_at']);
+        $archived = $this->development(true)->setHidden(['archived_at']);
+
+        $this->assertTrue($policy->{$ability}($this->identity(), $open));
+        $this->assertFalse($policy->{$ability}($this->identity(), $archived));
+    }
+
+    #[DataProvider('abilities')]
+    public function testAnArchiveStateChangedInMemoryDoesNotUnlockTheDevelopment(string $ability): void
+    {
+        $policy = new DevelopmentPolicy(access: $this->access(true));
+        $development = new Development(['id' => 7, 'archived_at' => DateTime::now()]);
+        $development->clean();
+        $development->archived_at = null;
+
+        $this->assertFalse($policy->{$ability}($this->identity(), $development));
     }
 }

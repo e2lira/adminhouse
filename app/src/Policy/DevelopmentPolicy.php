@@ -14,6 +14,9 @@ use Authorization\IdentityInterface;
 class DevelopmentPolicy
 {
     public const MANAGE = 'developments.manage';
+    public const UNITS_MANAGE = 'units.manage';
+    public const PEOPLE_MANAGE = 'people.manage';
+    public const OCCUPANCIES_MANAGE = 'occupancies.manage';
 
     /**
      * @param \App\Authorization\RoleAssignmentManager $manager Role-assignment rules.
@@ -70,7 +73,7 @@ class DevelopmentPolicy
      */
     public function canManageUnits(IdentityInterface $user, Development $development): bool
     {
-        return $this->canWriteDomain($user, $development, 'units.manage');
+        return $this->canWriteDomain($user, $development, self::UNITS_MANAGE);
     }
 
     /**
@@ -82,7 +85,7 @@ class DevelopmentPolicy
      */
     public function canManagePeople(IdentityInterface $user, Development $development): bool
     {
-        return $this->canWriteDomain($user, $development, 'people.manage');
+        return $this->canWriteDomain($user, $development, self::PEOPLE_MANAGE);
     }
 
     /**
@@ -94,7 +97,7 @@ class DevelopmentPolicy
      */
     public function canManageOccupancies(IdentityInterface $user, Development $development): bool
     {
-        return $this->canWriteDomain($user, $development, 'occupancies.manage');
+        return $this->canWriteDomain($user, $development, self::OCCUPANCIES_MANAGE);
     }
 
     /**
@@ -108,13 +111,30 @@ class DevelopmentPolicy
      */
     private function canWriteDomain(IdentityInterface $user, Development $development, string $permission): bool
     {
-        if (!array_key_exists('archived_at', $development->toArray()) || $development->archived_at !== null) {
+        if ($this->isArchivedOrUnknown($development)) {
             return false;
         }
 
         return $this->access
             ->allowedFor((int)$user->getIdentifier(), $permission)
             ->allows((int)$development->id);
+    }
+
+    /**
+     * The stored archive state decides, whatever happened to the entity in memory since it was read: the original
+     * value counts, and so does the current one. Fail closed when the field was never loaded. Original values are
+     * used because, unlike `toArray()`, they include hidden fields.
+     *
+     * @param \App\Model\Entity\Development $development Development.
+     * @return bool True when archived, or when the archive state is unknown.
+     */
+    private function isArchivedOrUnknown(Development $development): bool
+    {
+        $original = $development->getOriginalValues();
+
+        return !array_key_exists('archived_at', $original)
+            || $original['archived_at'] !== null
+            || $development->get('archived_at') !== null;
     }
 
     /**
