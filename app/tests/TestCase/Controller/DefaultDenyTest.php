@@ -268,4 +268,53 @@ class DefaultDenyTest extends DatabaseTestCase
             'edit POST' => 302, 'activate POST' => 302, 'deactivate POST' => 302, 'addSection POST' => 302,
         ], fn(int $dev) => null);
     }
+
+    /**
+     * Every unit route refused for the method it does not accept, as an administrator who could use the right one: the
+     * exact status, and no state changed (a GET must never activate, deactivate or create anything).
+     */
+    public function testEveryUnitRouteRefusesTheMethodItDoesNotAccept(): void
+    {
+        $user = $this->signInAs('ann');
+        $debug = Configure::read('debug');
+        Configure::write('debug', false);
+        $statuses = [];
+        try {
+            foreach (Router::routes() as $route) {
+                if (($route->defaults['controller'] ?? null) !== 'Units') {
+                    continue;
+                }
+                $accepted = (array)($route->defaults['_method'] ?? ['GET']);
+                foreach (array_diff(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], $accepted) as $method) {
+                    $dev = $this->createDevelopment('Opposite ' . count($statuses));
+                    $this->assignRole($user, 'administrator', $dev);
+                    $unit = $this->seedUnit($dev, null, '1');
+                    $url = str_replace(['{developmentId}', '{id}'], [(string)$dev, (string)$unit], $route->template);
+                    $this->_sendRequest($url, $method, []);
+                    $statuses[$route->defaults['action'] . ' ' . $method] = $this->_response->getStatusCode();
+                    $this->assertSame(
+                        1,
+                        (int)$this->db()->execute('SELECT COUNT(*) FROM units WHERE development_id = ? AND is_active', [$dev])->fetch()[0],
+                    );
+                    $this->assertSame(
+                        1,
+                        (int)$this->db()->execute('SELECT COUNT(*) FROM units WHERE development_id = ?', [$dev])->fetch()[0],
+                    );
+                    $this->assertSame(
+                        0,
+                        (int)$this->db()->execute('SELECT COUNT(*) FROM sections WHERE development_id = ?', [$dev])->fetch()[0],
+                    );
+                }
+            }
+        } finally {
+            Configure::write('debug', $debug);
+        }
+
+        $this->assertNotEmpty($statuses);
+        $this->assertSame([404], array_values(array_unique($statuses)), json_encode($statuses));
+        // POST-only routes were reached with GET, and the GET-only ones with POST: both are in the walk.
+        $this->assertArrayHasKey('deactivate GET', $statuses);
+        $this->assertArrayHasKey('addSection GET', $statuses);
+        $this->assertArrayHasKey('index POST', $statuses);
+    }
 }
