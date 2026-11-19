@@ -140,3 +140,9 @@
 - [2026-11-18] PR #1 merged to `main`. CI was red because of the TOTP key placeholder in CI; fixed on `fix/ci-totp-test-key` (targets `develop`). New promotion flow: work branches -> `develop` -> `qa` -> `main`.
 
 - [2026-11-18] developments-units PR 1a-i implemented and split into three stacked PRs (`feat/du-1a-i-1-scope-stack`, `feat/du-1a-i-2-scoped-reads`, `feat/du-1a-i-3-scoped-writes`, on `feat/units-sdd`): `DevelopmentScopedBehavior`, `DevelopmentScopeStack`, `ScopedOperationTrait`, scope exceptions. A fresh security review found one critical issue (implicit scope inheritance through the target's composite belongsTo) and several warnings; all fixed with tests in the PR that introduced the code (474 tests green at the tip); a second review round (approve with fixes) was applied too. Next: PR 1a-ii (bulk-operations trait, W-C, and architecture tests).
+
+- [2026-11-18] developments-units PR 1a-ii implemented on `feat/du-1a-ii-bulk-guards` (stacked on `feat/du-1a-i-3-scoped-writes`, not pushed): `ScopedBulkOperationsTrait` and three static guards (bulk trait on every scoped table, associations entering scoped tables, raw SQL or manual joins naming scoped tables) with fixtures. Heads-up for PR 1b: once `DevelopmentsTable` is scoped, the raw-SQL scan will flag `SELECT 1 FROM developments` in `src/Authorization/RoleAssignmentManager.php` (existence check); 1b must replace it or add an explicit, reasoned exception. Next: PR 1b (scope component and `DevelopmentsTable` retrofit).
+
+- [2026-11-18] developments-units PR 1a-ii review round 1 applied (3 more commits on `feat/du-1a-ii-bulk-guards`): statement-level scope condition and primary-key-change guard, insertQuery guard, hardened audits. Next: second review, then PR 1b.
+
+- [2026-11-18] developments-units PR 1a-ii review round 2 applied (zero-row scoped update now fails visibly, missing-scope exception, audit of ORM internals). Next: PR 1b.

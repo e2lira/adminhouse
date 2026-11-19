@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Test\Support\Scoped;
 
+use App\Model\Table\ScopedBulkOperationsTrait;
 use App\Model\Table\ScopedOperationTrait;
 use Cake\ORM\Table;
 
@@ -11,6 +12,7 @@ use Cake\ORM\Table;
  */
 class ItemsTable extends Table
 {
+    use ScopedBulkOperationsTrait;
     use ScopedOperationTrait;
 
     /**

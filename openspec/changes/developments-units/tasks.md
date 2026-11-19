@@ -67,17 +67,19 @@ Rollback boundary: revert the PR; nothing depends on it yet.
 - Est. lines: ~200
 
 Tasks:
-- [ ] 2.1 RED (W-C): tests that `updateAll()`, `deleteAll()`, `updateQuery()`, `deleteQuery()` throw `LogicException` on a table using the trait; a dependent `hasMany` cascade that calls `deleteAll` is also refused (documented, expected throw).
-- [ ] 2.2 GREEN: trait `ScopedBulkOperations` overriding all four; message names the table.
-- [ ] 2.3 RED (W-C): architecture test: every Table class that adds `DevelopmentScopedBehavior` also uses `ScopedBulkOperations` (reflection over `app/src/Model/Table`); fails on a fixture violation.
-- [ ] 2.4 RED: architecture test walking every Table's associations: an association may enter a scoped table only from a scoped table; whitelist contains `UsersTable hasMany RoleAssignments` (legal: `RoleAssignments` not scoped, AD3); unlisted entries fail.
-- [ ] 2.5 RED: architecture test scanning `app/src` for scoped table names in raw SQL / manual `->join()`, excluding `app/config/Migrations` and `App\Database` (AD4c); initially a vacuous pass with a fixture proving it detects a violation.
-- [ ] 2.6 GREEN: implement the scanners/helpers (test support classes).
-- [ ] 2.7 REFACTOR; Docs.
+- [x] 2.1 RED (W-C): tests that `updateAll()`, `deleteAll()`, `updateQuery()`, `deleteQuery()` throw `LogicException` on a table using the trait; a dependent `hasMany` cascade that calls `deleteAll` is also refused (documented, expected throw).
+- [x] 2.2 GREEN: trait `ScopedBulkOperations` overriding all four; message names the table.
+- [x] 2.3 RED (W-C): architecture test: every Table class that adds `DevelopmentScopedBehavior` also uses `ScopedBulkOperations` (reflection over `app/src/Model/Table`); fails on a fixture violation.
+- [x] 2.4 RED: architecture test walking every Table's associations: an association may enter a scoped table only from a scoped table; whitelist contains `UsersTable hasMany RoleAssignments` (legal: `RoleAssignments` not scoped, AD3); unlisted entries fail.
+- [x] 2.5 RED: architecture test scanning `app/src` for scoped table names in raw SQL / manual `->join()`, excluding `app/config/Migrations` and `App\Database` (AD4c); initially a vacuous pass with a fixture proving it detects a violation.
+- [x] 2.6 GREEN: implement the scanners/helpers (test support classes).
+- [x] 2.7 REFACTOR; Docs.
 
 Verification: phpunit (alone), phpcs. No migration.
 PR description: template; "No database change"; note residual risk of string-built SQL covered only by RLS.
 Rollback boundary: revert; trait unused by production tables until 1b.
+
+Implementation note (1a-ii): the trait is named `ScopedBulkOperationsTrait` (coding standard requires the suffix); branch `feat/du-1a-ii-bulk-guards`; task 2.4 reconciled with revised AD2 (static guard: an association entering a scoped table needs a scoped source with a development-column key, or a reasoned whitelist entry; `UsersTable hasMany RoleAssignments` needs none because RoleAssignments is unscoped); `updateQuery()`/`deleteQuery()` let through only the ORM's own single-row `_update`/`_processDelete`. Review round 1: those statements carry the scope's development condition, `insertQuery()` is guarded too, the behavior refuses a changed primary key, and the audits were hardened (alias, overrides, raw-SQL gaps, discovery). Round 2: a zero-row scoped update throws `DevelopmentScopeViolation` (`ScopedUpdateQuery`), and the audit rejects overridden ORM internals.
 
 ---
 

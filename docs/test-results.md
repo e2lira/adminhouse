@@ -103,3 +103,9 @@
 - [2026-11-18] CI-001: `TOTP_ENCRYPTION_KEY=__TOTP_ENCRYPTION_KEY__ vendor/bin/phpunit` reproduced the CI error (red), then after the fix: `OK (407 tests, 1510 assertions)`; with the real local key: `OK (407 tests, 1510 assertions)`; `phpcs` clean.
 
 - [2026-11-18] DU-1A-I: new tests seen failing first (missing classes/behavior), then `OK (441 tests, 1601 assertions)` for the full suite run alone; `phpcs` exit 0. After the security review fixes: PR 2 tip `OK (442 tests, 1591 assertions)`, PR 3 tip `OK (474 tests, 1688 assertions)` (after review round 2), `phpcs` exit 0; the fix tests were seen failing first. Behavior tested on test-only tables created per test with the owner login in a per-process schema dropped in `finally` (the runtime role cannot create temporary tables). Not verified: behavior against real RLS (lands with PR 3a-i/3a-ii).
+
+- [2026-11-18] DU-1A-II: new tests seen failing first (bulk operations not refused; audit class missing), then `OK (492 tests, 1747 assertions)` for the full suite run alone; `phpcs` exit 0. The raw-SQL scanner was also run against the real `src` with the name `developments` and reported the one known existing query, proving it is not vacuous. Not verified: behavior against real RLS (lands with PR 3a-i/3a-ii).
+
+- [2026-11-18] DU-1A-II review round 1: the new tests were seen failing first (changed primary key accepted, statements without the development condition, insertQuery open, audit gaps), then `OK (505 tests, 1783 assertions)` for the full suite run alone; `phpcs` exit 0.
+
+- [2026-11-18] DU-1A-II review round 2: new tests seen failing first (zero-row update looked saved, plain LogicException, overridden `_update` accepted), then `OK (507 tests, 1786 assertions)` for the full suite run alone; `phpcs` exit 0.

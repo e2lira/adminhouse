@@ -206,3 +206,5 @@
 | CI-001 | Fix red CI after PR #1: test bootstrap replaces the CI placeholder TOTP key; adopt develop -> qa -> main promotion flow. | DONE | build | Claude | 2026-11-18 |
 
 | DU-1A-I | developments-units PR 1a-i as three stacked PRs (1 scope stack, 2 scoped reads, 3 scoped writes): scoped behavior, scope stack, scoped save/delete trait, exceptions (openspec tasks 1.1 to 1.14); security review fixes applied. | DONE (pending second review) | build | Claude | 2026-11-18 |
+
+| DU-1A-II | developments-units PR 1a-ii (`feat/du-1a-ii-bulk-guards`): bulk-operations trait and architecture tests for the scope (openspec tasks 2.1 to 2.7). | DONE (pending review) | build | Claude | 2026-11-18 |
