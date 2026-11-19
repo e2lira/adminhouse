@@ -44,13 +44,15 @@ abstract class ScopedTableTestCase extends DatabaseTestCase
         $db->execute('CREATE SCHEMA ' . $this->schema);
         $db->execute('GRANT USAGE ON SCHEMA ' . $this->schema . ' TO ' . RowLevelSecurity::ROLE_APP);
         $this->useSchema($this->schema . ', public');
+        // Other suites enable savepoints on the shared runtime connection; each test states what it needs.
+        $this->appDb()->disableSavePoints();
         foreach (
             [
                 'scoped_items (id serial PRIMARY KEY, development_id integer NOT NULL, name text, section_id integer,
                     note_id integer,
                     UNIQUE (development_id, id), UNIQUE (development_id, name))',
                 'scoped_notes (id serial PRIMARY KEY, development_id integer NOT NULL, item_id integer NOT NULL,
-                    body text)',
+                    body text, UNIQUE (development_id, body))',
                 'scoped_holders (id serial PRIMARY KEY, item_id integer, note_id integer)',
                 'scoped_people (id serial PRIMARY KEY, name text)',
                 'scoped_person_links (person_id integer NOT NULL, development_id integer NOT NULL)',
