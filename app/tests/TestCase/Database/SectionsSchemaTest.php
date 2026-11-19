@@ -70,6 +70,23 @@ class SectionsSchemaTest extends DatabaseTestCase
         $this->assertNull($this->insertSection($dev, 'Tower 1'));
     }
 
+    public function testTheNameIsRequiredAndBoundedTo150Characters(): void
+    {
+        $dev = $this->createDevelopment('A');
+
+        $this->assertSame(
+            self::NOT_NULL,
+            $this->ownerSqlState(
+                'INSERT INTO sections (development_id, name, created, modified) VALUES (?, NULL, NOW(), NOW())',
+                [$dev],
+            ),
+        );
+        $this->assertNull($this->insertSection($dev, str_repeat('n', 150)));
+        $this->assertSame(self::CHECK, $this->insertSection($dev, str_repeat('m', 151)));
+        // Characters, not bytes: 150 accented letters fit.
+        $this->assertNull($this->insertSection($dev, str_repeat('á', 150)));
+    }
+
     public function testSectionNamesAreUniquePerDevelopmentOnly(): void
     {
         $a = $this->createDevelopment('A');

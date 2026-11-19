@@ -86,6 +86,21 @@ class UnitsSchemaTest extends DatabaseTestCase
         }
     }
 
+    public function testTheNumberIsRequiredAndBoundedTo50Characters(): void
+    {
+        $this->assertSame(
+            self::NOT_NULL,
+            $this->ownerSqlState(
+                "INSERT INTO units (development_id, number, type, created, modified) VALUES (?, NULL, 'house', NOW(), NOW())",
+                [$this->devA],
+            ),
+        );
+        $this->assertNull($this->insertUnit($this->devA, null, str_repeat('9', 50)));
+        $this->assertSame(self::CHECK, $this->insertUnit($this->devA, null, str_repeat('9', 51)));
+        // Characters, not bytes: 50 accented letters fit.
+        $this->assertNull($this->insertUnit($this->devA, null, str_repeat('á', 50)));
+    }
+
     public function testAHouseAnApartmentAndALotLiveInTheSameDevelopment(): void
     {
         $this->assertNull($this->insertUnit($this->devA, null, '1', 'house'));
@@ -107,6 +122,8 @@ class UnitsSchemaTest extends DatabaseTestCase
             'indiviso only' => [null, '2.5000', null],
             'indiviso exactly 100' => [null, '100', null],
             'tiny positive indiviso' => [null, '0.0001', null],
+            'NaN area' => ['NaN', null, self::CHECK],
+            'NaN indiviso' => [null, 'NaN', self::CHECK],
             'zero area' => ['0', null, self::CHECK],
             'negative area' => ['-1', null, self::CHECK],
             'area that rounds to zero' => ['0.004', null, self::CHECK],
