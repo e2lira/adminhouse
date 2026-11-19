@@ -27,6 +27,8 @@ abstract class RlsTestCase extends DatabaseTestCase
 
     protected int $accountantA;
 
+    protected int $dataEntryA;
+
     protected int $guardA;
 
     protected int $resident;
@@ -60,6 +62,8 @@ abstract class RlsTestCase extends DatabaseTestCase
         $this->assignRole($this->adminB, 'administrator', $this->devB);
         $this->accountantA = $this->createUser('accountant_a', null);
         $this->assignRole($this->accountantA, 'accountant', $this->devA);
+        $this->dataEntryA = $this->createUser('data_entry_a', null);
+        $this->assignRole($this->dataEntryA, 'data_entry', $this->devA);
         $this->guardA = $this->createUser('guard_a', null);
         $this->assignRole($this->guardA, 'guard', $this->devA);
         $this->resident = $this->createUser('resident_a', null);

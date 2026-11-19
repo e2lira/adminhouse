@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace App\Test\Support;
 
-use App\Clock\BusinessClock;
 use App\Database\DevelopmentContext;
 use Authentication\PasswordHasher\DefaultPasswordHasher;
 use Cake\Database\Connection;
@@ -178,15 +177,16 @@ abstract class DatabaseTestCase extends TestCase
     }
 
     /**
-     * A calendar date relative to today in the business time zone, so tests never flake between 18:00 and 24:00
-     * local time, when UTC is already on the next day.
+     * A calendar date relative to today in the business time zone, taken from the database's own `business_today()`
+     * (the clock row-level security uses), so a fixture never straddles midnight between the PHP and database
+     * clocks and never flakes between 18:00 and 24:00 local time, when UTC is already on the next day.
      *
      * @param int $offset Days from today (negative for the past).
      * @return string `Y-m-d`.
      */
     protected function businessDay(int $offset = 0): string
     {
-        return (new BusinessClock())->today()->addDays($offset)->format('Y-m-d');
+        return (string)$this->db()->execute('SELECT (public.business_today() + ?::int)::text', [$offset])->fetch()[0];
     }
 
     /**

@@ -168,16 +168,16 @@ Notes from review of PR 2b (carry into 3a-i):
 - Add a real-database test that administrator and data_entry holders of `units.manage` are allowed on an unarchived development and refused on an archived one (the 2b policy tests use a stub for those roles because the permission is only seeded here).
 
 Tasks:
-- [ ] 6.1 RED: RLS tests for `permission_dev_ids(code)` per actor (super, adminA, dataEntryA, accountantA, resident, adminB, job): active assignment holding the code; `.view` codes include read-only assignments; non-`.view` codes need a writable assignment and a non-archived development; request context only (empty for jobs).
-- [ ] 6.2 GREEN: migration: `permission_dev_ids(p_code text) bigint[]` definer, STABLE, owner `kualitet_definer`, pinned `search_path`, EXECUTE only to `kualitet_app`; `down()` drops it.
-- [ ] 6.3 RED: parity test `permission_dev_ids` vs `AccessControl::allowedFor` across role x read_only x window (W-E). Archived dimension is an EXPECTED DIVERGENCE for write codes: `permission_dev_ids` excludes archived developments for non-`.view` codes (RLS), whereas `allowedFor` (layer 1) includes archived developments; the test asserts this divergence explicitly.
-- [ ] 6.4 GREEN (W-E): document in code comment and `docs/` that layer 1 includes archived developments and refusal comes from `DevelopmentPolicy::canManage*` (incl. super, per 2b) plus RLS.
-- [ ] 6.5 RED: `Rls::managedDomainTable($table, $code)` tests: validates `^[a-z_]+\.[a-z_]+$` (rejects others); SELECT `is_super OR development_id = ANY(dev_ids())`; INSERT/UPDATE `is_super OR development_id = ANY(permission_dev_ids(code))`; DELETE `is_super` only; column UPDATE grants exclude `id`, `development_id`.
-- [ ] 6.6 GREEN: `Rls::managedDomainTable`, `Rls::permissionDevIds()` helpers (`app/config/Migrations` support class).
-- [ ] 6.7 RED: `AccessControlTest::roleMatrix`: `units.manage` for administrator and data_entry only; resident has no `units.view`; resident-only user refused (DS resident requirement).
-- [ ] 6.8 GREEN: seed migration `units.manage`; revoke migration for resident `units.view` with symmetric `down()` that re-grants only that row; each `down()` removes only its own rows (AD6).
-- [ ] 6.9 Update `RlsTestCase` with the `dataEntryA` actor; update catalogue seed comment (20261118000001) and ADR-0005 with the AD13 note and the AD8/archived-divergence note.
-- [ ] 6.10 Migrations up/down/up; Docs.
+- [x] 6.1 RED: RLS tests for `permission_dev_ids(code)` per actor (super, adminA, dataEntryA, accountantA, resident, adminB, job): active assignment holding the code; `.view` codes include read-only assignments; non-`.view` codes need a writable assignment and a non-archived development; request context only (empty for jobs).
+- [x] 6.2 GREEN: migration: `permission_dev_ids(p_code text) bigint[]` definer, STABLE, owner `kualitet_definer`, pinned `search_path`, EXECUTE only to `kualitet_app`; `down()` drops it.
+- [x] 6.3 RED: parity test `permission_dev_ids` vs `AccessControl::allowedFor` across role x read_only x window (W-E). Archived dimension is an EXPECTED DIVERGENCE for write codes: `permission_dev_ids` excludes archived developments for non-`.view` codes (RLS), whereas `allowedFor` (layer 1) includes archived developments; the test asserts this divergence explicitly.
+- [x] 6.4 GREEN (W-E): document in code comment and `docs/` that layer 1 includes archived developments and refusal comes from `DevelopmentPolicy::canManage*` (incl. super, per 2b) plus RLS.
+- [x] 6.5 RED: `Rls::managedDomainTable($table, $code)` tests: validates `^[a-z_]+\.[a-z_]+$` (rejects others); SELECT `is_super OR development_id = ANY(permission_dev_ids(readCode))` (amended 2026-11-19, design A1; read code must end in `.view`, write code must not); INSERT/UPDATE `is_super OR development_id = ANY(permission_dev_ids(code))`; DELETE `is_super` only; column UPDATE grants exclude `id`, `development_id`.
+- [x] 6.6 GREEN: `Rls::managedDomainTable`, `Rls::permissionDevIds()` helpers (`app/config/Migrations` support class). Applied signature: `managedDomainTable($table, $readCode, $writeCode, array $updatableColumns, array $insertOnlyColumns = [])` (the column lists are required because column grants must be explicit).
+- [x] 6.7 RED: `AccessControlTest::roleMatrix`: `units.manage` for administrator and data_entry only; resident has no `units.view`; resident-only user refused (DS resident requirement).
+- [x] 6.8 GREEN: seed migration `units.manage`; revoke migration for resident `units.view` with symmetric `down()` that re-grants only that row; each `down()` removes only its own rows (AD6).
+- [x] 6.9 Update `RlsTestCase` with the `dataEntryA` actor; update catalogue seed comment (20261118000001) and ADR-0005 with the AD13 note and the AD8/archived-divergence note.
+- [x] 6.10 Migrations up/down/up; Docs.
 
 Verification: phpunit (alone), phpcs, migrate/rollback/migrate.
 PR description: template; Database change: new definer function, seed, revoke; security note: resident loses `units.view` (user-confirmed 2026-11-18).
@@ -192,12 +192,17 @@ Rollback boundary: rollback the migrations (restores resident `units.view`); rev
 - Satisfies: U "Sections", "Unit identity", "Mixed unit types", "Measurements", "Active flag", "Database enforcement"; AD4 trigger.
 - Est. lines: ~400 (fallback split: sections / units)
 
+Notes from review of PR 3a-i (binding):
+- Table contract for `managedDomainTable`: NOT NULL `development_id`; database-generated primary key (no sequence grant is needed, the ORM reads the id from `RETURNING *`); list `modified` among the updatable columns and `created` among the insert-only ones.
+- Cross-table references between managed tables use composite foreign keys `(development_id, x_id)` onto `UNIQUE (development_id, id)`, and unique indexes are scoped per development (for example `UNIQUE (development_id, name)`): foreign-key and unique checks bypass RLS and can leak existence of rows of a development the caller cannot read.
+- Write implies read: every role holding `units.manage` must also hold `units.view` (the seed invariant test enforces it).
+
 Tasks:
 - [ ] 7.1 RED: schema tests for `sections` (name non-blank check, `UNIQUE (development_id, id)`, `UNIQUE (development_id, name)`).
 - [ ] 7.2 RED: schema tests for `units`: number non-blank; type CHECK; `lot_area_m2 > 0`; `indiviso_pct > 0 AND <= 100`; `is_active` default true; composite FK `(development_id, section_id) -> sections`; `UNIQUE NULLS NOT DISTINCT (development_id, section_id, number)`; same number in different section/development accepted; foreign-development section rejected.
 - [ ] 7.3 RED: `forbid_development_id_change()` trigger tests (update of `development_id` rejected).
-- [ ] 7.4 GREEN: migration (up/down) creating both tables, trigger (function reusable by later tables), RLS via `managedDomainTable('sections'|'units', 'units.manage')`.
-- [ ] 7.5 RED/GREEN: RLS tests per actor (super, adminA, dataEntryA, accountantA, resident, adminB, job) per command: SELECT scope (resident sees via `dev_ids()`; documented coarse behavior), INSERT/UPDATE allowed only adminA/dataEntryA/super, DELETE super only (adminA/dataEntryA delete removes no row), cross-development reads/writes see/change nothing, job read-only.
+- [ ] 7.4 GREEN: migration (up/down) creating both tables, trigger (function reusable by later tables), RLS via `managedDomainTable('sections'|'units', 'units.view', 'units.manage', [updatable columns incl. modified], ['created'])` (design A1: reads follow `units.view`).
+- [ ] 7.5 RED/GREEN: RLS tests per actor (super, adminA, dataEntryA, accountantA, resident, adminB, job) per command: SELECT scope (follows `units.view` through `permission_dev_ids`: adminA, dataEntryA, accountantA read; resident and guard hold an assignment but read nothing; design A1), INSERT/UPDATE allowed only adminA/dataEntryA/super, DELETE super only (adminA/dataEntryA delete removes no row), cross-development reads/writes see/change nothing, job read-only.
 - [ ] 7.6 Migration up/down/up; Docs.
 
 Verification: phpunit (alone), phpcs, migrate/rollback/migrate.

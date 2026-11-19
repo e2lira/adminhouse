@@ -165,6 +165,78 @@ class DevelopmentArchivedWritesPolicyTest extends DatabaseTestCase
         $this->assertFalse($policy->{$ability}($this->identity($root), $archived));
     }
 
+    /**
+     * @return array<string, array{string, bool, bool}>
+     */
+    public static function realUnitsManageHolders(): array
+    {
+        // role, read-only assignment, whether `units.manage` is expected on an unarchived development
+        return [
+            'administrator' => ['administrator', false, true],
+            'data_entry' => ['data_entry', false, true],
+            'read-only administrator' => ['administrator', true, false],
+            'read-only data_entry' => ['data_entry', true, false],
+            'accountant' => ['accountant', false, false],
+            'resident' => ['resident', false, false],
+        ];
+    }
+
+    /**
+     * Loads a development the way the call sites must: a full read under a scope, inside the session of the user, so
+     * the entity carries its stored `archived_at`.
+     *
+     * @param int $userId Session user.
+     * @param int $developmentId Development id.
+     * @return \App\Model\Entity\Development
+     */
+    private function loadDevelopment(int $userId, int $developmentId): Development
+    {
+        $this->actAs($userId);
+        try {
+            /** @var \App\Model\Entity\Development $development */
+            $development = $this->fetchTable('Developments')
+                ->find('all', developmentScope: DevelopmentScope::all())
+                ->where(['Developments.id' => $developmentId])
+                ->firstOrFail();
+        } finally {
+            $this->endSession();
+        }
+
+        return $development;
+    }
+
+    /**
+     * The seeded `units.manage` rows decide, not a stub: holders are allowed on an unarchived development and refused
+     * on an archived one, and a read-only assignment is refused on both. Developments are loaded with a full scoped
+     * read, not built by hand.
+     *
+     * @param string $role Role code.
+     * @param bool $readOnly Whether the assignment is read-only.
+     * @param bool $allowedWhenOpen Whether `units.manage` is expected on an unarchived development.
+     * @return void
+     */
+    #[DataProvider('realUnitsManageHolders')]
+    public function testSeededUnitsManageHoldersAreAllowedOnAnUnarchivedDevelopmentAndRefusedOnAnArchivedOne(
+        string $role,
+        bool $readOnly,
+        bool $allowedWhenOpen,
+    ): void {
+        $dev = $this->createDevelopment('A');
+        $user = $this->createUser('u_' . $role);
+        $this->assignRole($user, $role, $dev, -30, null, $readOnly);
+        $policy = new DevelopmentPolicy(access: new ActingAccessControl());
+        $identity = $this->identity($user);
+
+        $open = $this->loadDevelopment($user, $dev);
+        $this->assertNull($open->archived_at);
+        $this->assertSame($allowedWhenOpen, $policy->canManageUnits($identity, $open), $role);
+
+        $this->db()->execute('UPDATE developments SET archived_at = NOW() WHERE id = ?', [$dev]);
+        $archived = $this->loadDevelopment($user, $dev);
+        $this->assertNotNull($archived->archived_at);
+        $this->assertFalse($policy->canManageUnits($identity, $archived), $role);
+    }
+
     #[DataProvider('abilities')]
     public function testAHiddenArchiveFieldStillCountsAsLoaded(string $ability): void
     {
