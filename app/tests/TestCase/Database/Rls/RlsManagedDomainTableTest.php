@@ -4,8 +4,10 @@ declare(strict_types=1);
 namespace App\Test\TestCase\Database\Rls;
 
 use App\Database\RowLevelSecurity;
+use Cake\ORM\Table;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Throwable;
 
 /**
  * Managed domain tables (AD7, amended 2026-11-19): reads follow the read permission and writes follow the write
@@ -270,6 +272,11 @@ class RlsManagedDomainTableTest extends RlsTestCase
         $this->assertSame(['a1', 'a2'], $this->labels());
         $this->assertRejected("INSERT INTO probe_managed (development_id, label) VALUES (?, 'new')", [$this->devA]);
         $this->assertDenied("UPDATE probe_managed SET label = 'x' WHERE label = 'a1'");
+        $this->assertDenied('DELETE FROM probe_managed');
+
+        // The rows are visible to this session and still unchanged: the denial is real, not an empty match.
+        $this->assertSame(['a1', 'a2'], $this->labels());
+        $this->assertRowsUntouched();
     }
 
     public function testAJobReadsNothing(): void
@@ -362,6 +369,8 @@ class RlsManagedDomainTableTest extends RlsTestCase
 
         $this->assertRejected("INSERT INTO probe_managed (development_id, label) VALUES (?, 'new')", [$this->devA]);
         $this->assertDenied("UPDATE probe_managed SET label = 'x' WHERE label = 'a1'");
+        $this->assertDenied('DELETE FROM probe_managed');
+        $this->assertRowsUntouched();
     }
 
     public function testTheSuperAdministratorWritesAnywhere(): void
@@ -420,5 +429,125 @@ class RlsManagedDomainTableTest extends RlsTestCase
             $this->assertAllowed("UPDATE probe_managed SET label = 'kept' WHERE label = 'a2'");
             $this->endSession();
         }
+    }
+
+    /**
+     * Commit the session and read every row back as the owner: nothing was inserted, changed or deleted.
+     *
+     * @return void
+     */
+    private function assertRowsUntouched(): void
+    {
+        $this->commitSession();
+        $rows = $this->db()->execute('SELECT label, development_id FROM probe_managed ORDER BY label')->fetchAll();
+
+        $this->assertSame(
+            [['a1', $this->devA], ['a2', $this->devA], ['b1', $this->devB]],
+            array_map(static fn(array $row): array => [$row[0], (int)$row[1]], $rows),
+        );
+    }
+
+    /**
+     * A user whose only role holds the write code and not the read code (a shape the seeded matrix never produces).
+     *
+     * @return int User id.
+     */
+    private function writeOnlyUser(): int
+    {
+        $this->db()->execute("INSERT INTO roles (code, name) VALUES ('probe_writer', 'Probe writer')");
+        $this->db()->execute(
+            "INSERT INTO role_permissions (role_id, permission_id)
+             SELECT r.id, p.id FROM roles r, permissions p WHERE r.code = 'probe_writer' AND p.code = ?",
+            [self::WRITE],
+        );
+        $user = $this->createUser('write_only', null);
+        $this->assignRole($user, 'probe_writer', $this->devA);
+
+        return $user;
+    }
+
+    private function dropWriteOnlyRole(): void
+    {
+        $this->db()->execute("DELETE FROM role_assignments WHERE role_id IN (SELECT id FROM roles WHERE code = 'probe_writer')");
+        $this->db()->execute("DELETE FROM roles WHERE code = 'probe_writer'");
+    }
+
+    /**
+     * PostgreSQL applies the SELECT policy to a write that reads or returns rows, so holding the write code without
+     * the read code gives a bare INSERT and nothing else. This is why every role that holds a write code must also
+     * hold its read code (see the seed invariant in AccessControlTest).
+     *
+     * @return void
+     */
+    public function testWriteWithoutReadAllowsOnlyABareInsert(): void
+    {
+        $user = $this->writeOnlyUser();
+        try {
+            $this->actAs($user);
+
+            $this->assertSame([], $this->labels());
+            $this->assertRejected(
+                "INSERT INTO probe_managed (development_id, label) VALUES (?, 'ret') RETURNING id",
+                [$this->devA],
+            );
+            $this->assertSame(0, $this->attempt("UPDATE probe_managed SET label = 'x' WHERE label = 'a1'"));
+            $this->assertSame(1, $this->attempt("INSERT INTO probe_managed (development_id, label) VALUES (?, 'bare')", [$this->devA]));
+            $this->commitSession();
+
+            $labels = array_map(
+                static fn(array $row): string => $row[0],
+                $this->db()->execute('SELECT label FROM probe_managed ORDER BY label')->fetchAll(),
+            );
+            $this->assertSame(['a1', 'a2', 'b1', 'bare'], $labels);
+        } finally {
+            $this->dropWriteOnlyRole();
+        }
+    }
+
+    /**
+     * The CakePHP PostgreSQL driver appends `RETURNING *` to every insert and reads the new id from that row (no
+     * `currval`), so the runtime role needs no sequence privilege; it needs the SELECT policy to show it the new row,
+     * which is the write-implies-read rule. Identity columns need no USAGE grant for the implicit default.
+     *
+     * @return void
+     */
+    public function testTheOrmGetsTheNewIdBackThroughReturningUnderTheRuntimeRole(): void
+    {
+        $this->actAs($this->adminA);
+        $table = new Table(['table' => 'probe_managed', 'connection' => $this->appDb(), 'alias' => 'Probe']);
+
+        $entity = $table->newEntity(
+            ['development_id' => $this->devA, 'label' => 'via orm'],
+            ['accessibleFields' => ['*' => true]],
+        );
+        $saved = $table->save($entity, ['checkRules' => false]);
+
+        $this->assertNotFalse($saved);
+        $this->assertGreaterThan(0, (int)$saved->get('id'));
+        $this->assertSame('via orm', $this->appDb()->execute(
+            'SELECT label FROM probe_managed WHERE id = ?',
+            [$saved->get('id')],
+        )->fetch()[0]);
+        $sql = $this->appDb()->insertQuery()->insert(['label'])->into('probe_managed')->values(['label' => 'x'])->sql();
+        $this->assertStringEndsWith('RETURNING *', $sql);
+    }
+
+    public function testTheOrmCannotInsertOutsideTheWriteScopeEvenThoughItAsksForReturning(): void
+    {
+        $this->actAs($this->accountantA);
+        $table = new Table(['table' => 'probe_managed', 'connection' => $this->appDb(), 'alias' => 'Probe']);
+        $entity = $table->newEntity(
+            ['development_id' => $this->devA, 'label' => 'refused'],
+            ['accessibleFields' => ['*' => true]],
+        );
+
+        $this->appDb()->execute('SAVEPOINT orm');
+        try {
+            $table->save($entity, ['checkRules' => false, 'atomic' => false]);
+            $this->fail('The insert was accepted');
+        } catch (Throwable) {
+            $this->appDb()->execute('ROLLBACK TO SAVEPOINT orm');
+        }
+        $this->assertRowsUntouched();
     }
 }

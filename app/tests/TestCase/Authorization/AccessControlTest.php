@@ -215,6 +215,41 @@ class AccessControlTest extends DatabaseTestCase
         $this->assertFalse($scope->allows($other));
     }
 
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function managedWritePairs(): array
+    {
+        // Write code => read code of each managed domain table (Rls::managedDomainTable). Add a row with each new one.
+        return [
+            'units' => ['units.manage', 'units.view'],
+        ];
+    }
+
+    /**
+     * PostgreSQL applies the SELECT policy to INSERT ... RETURNING (what the ORM issues) and to the WHERE of an
+     * UPDATE, so a role that can write a managed table but not read it can do nothing useful. Seeds keep the two
+     * together.
+     *
+     * @param string $write Write code.
+     * @param string $read Read code.
+     * @return void
+     */
+    #[DataProvider('managedWritePairs')]
+    public function testEveryRoleHoldingAManagedWriteCodeAlsoHoldsItsReadCode(string $write, string $read): void
+    {
+        $holders = fn(string $code): array => array_column($this->db()->execute(
+            'SELECT r.code FROM role_permissions rp
+             JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id
+             WHERE p.code = ? ORDER BY r.code',
+            [$code],
+        )->fetchAll('assoc'), 'code');
+
+        $writers = $holders($write);
+        $this->assertNotSame([], $writers, 'No role holds ' . $write);
+        $this->assertSame([], array_values(array_diff($writers, $holders($read))));
+    }
+
     public function testUnitsManageNeedsAWritableAssignment(): void
     {
         $dev = $this->createDevelopment('A');
