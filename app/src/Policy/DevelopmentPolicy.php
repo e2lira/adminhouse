@@ -13,7 +13,7 @@ use Authorization\IdentityInterface;
  */
 class DevelopmentPolicy
 {
-    private const MANAGE = 'developments.manage';
+    public const MANAGE = 'developments.manage';
 
     /**
      * @param \App\Authorization\RoleAssignmentManager $manager Role-assignment rules.
@@ -59,6 +59,62 @@ class DevelopmentPolicy
     public function canArchive(IdentityInterface $user, Development $development): bool
     {
         return $this->canManage($user, $development);
+    }
+
+    /**
+     * May the user create, change or end units and sections here (`units.manage`)? Never in an archived development.
+     *
+     * @param \Authorization\IdentityInterface $user Identity.
+     * @param \App\Model\Entity\Development $development Development, loaded with `archived_at`.
+     * @return bool
+     */
+    public function canManageUnits(IdentityInterface $user, Development $development): bool
+    {
+        return $this->canWriteDomain($user, $development, 'units.manage');
+    }
+
+    /**
+     * May the user create or change people here (`people.manage`)? Never in an archived development.
+     *
+     * @param \Authorization\IdentityInterface $user Identity.
+     * @param \App\Model\Entity\Development $development Development, loaded with `archived_at`.
+     * @return bool
+     */
+    public function canManagePeople(IdentityInterface $user, Development $development): bool
+    {
+        return $this->canWriteDomain($user, $development, 'people.manage');
+    }
+
+    /**
+     * May the user create or end occupancies here (`occupancies.manage`)? Never in an archived development.
+     *
+     * @param \Authorization\IdentityInterface $user Identity.
+     * @param \App\Model\Entity\Development $development Development, loaded with `archived_at`.
+     * @return bool
+     */
+    public function canManageOccupancies(IdentityInterface $user, Development $development): bool
+    {
+        return $this->canWriteDomain($user, $development, 'occupancies.manage');
+    }
+
+    /**
+     * W-E: an archived development takes no writes to its units, people or occupancies, the super-administrator
+     * included: they unarchive first. A development read without its archive state is refused (fail closed).
+     *
+     * @param \Authorization\IdentityInterface $user Identity.
+     * @param \App\Model\Entity\Development $development Development.
+     * @param string $permission Permission code of the write.
+     * @return bool
+     */
+    private function canWriteDomain(IdentityInterface $user, Development $development, string $permission): bool
+    {
+        if (!array_key_exists('archived_at', $development->toArray()) || $development->archived_at !== null) {
+            return false;
+        }
+
+        return $this->access
+            ->allowedFor((int)$user->getIdentifier(), $permission)
+            ->allows((int)$development->id);
     }
 
     /**
