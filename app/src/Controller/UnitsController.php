@@ -30,24 +30,27 @@ class UnitsController extends AppController
 {
     private const TYPES = ['apartment' => 'Departamento', 'house' => 'Casa', 'lot' => 'Lote'];
     private const PAGE_SIZE = 100;
+    private const DUPLICATE = 'Ya existe una unidad con ese valor de «{number}» para el mismo valor de '
+        . '«{section}» (o sin él).';
     private const ARCHIVED = 'El desarrollo está archivado: no se pueden guardar cambios.';
 
     /**
-     * Spanish copy for the field errors, by field and rule (the model keeps its messages in English).
+     * Spanish copy for the field errors, by field and rule (the model keeps its messages in English). `{number}` and
+     * `{section}` stand for the development's own labels, in lower case.
      */
     private const ERRORS = [
         'number' => [
-            '_required' => 'Escribe el número.',
-            '_empty' => 'Escribe el número.',
-            'notBlank' => 'Escribe el número.',
+            '_required' => 'Escribe un valor para «{number}».',
+            '_empty' => 'Escribe un valor para «{number}».',
+            'notBlank' => 'Escribe un valor para «{number}».',
             'maxLength' => 'No puede tener más de 50 caracteres.',
-            '_isUnique' => 'Ya existe una unidad con ese número en esta sección.',
-            '_unique' => 'Ya existe una unidad con ese número en esta sección.',
+            '_isUnique' => self::DUPLICATE,
+            '_unique' => self::DUPLICATE,
         ],
         'type' => ['*' => 'Elige un tipo válido.'],
         'section_id' => [
-            '_existsIn' => 'La sección no existe en este desarrollo.',
-            '*' => 'Elige una sección válida.',
+            '_existsIn' => 'El valor de «{section}» no existe en este desarrollo.',
+            '*' => 'Elige un valor válido para «{section}».',
         ],
         'lot_area_m2' => [
             'numeric' => 'El valor debe ser un número.',
@@ -144,7 +147,7 @@ class UnitsController extends AppController
 
                 return $this->redirect($this->indexUrl($development));
             }
-            $this->fail($unit, 'No se pudo guardar la unidad.');
+            $this->fail($unit, 'No se pudo guardar la unidad.', $development);
         }
 
         return $this->showForm($development, $unit, 'Nueva unidad');
@@ -168,7 +171,7 @@ class UnitsController extends AppController
 
                 return $this->redirect($this->indexUrl($development));
             }
-            $this->fail($unit, 'No se pudo guardar la unidad.');
+            $this->fail($unit, 'No se pudo guardar la unidad.', $development);
         }
 
         return $this->showForm($development, $unit, 'Editar unidad');
@@ -377,9 +380,10 @@ class UnitsController extends AppController
      *
      * @param \App\Model\Entity\Unit $unit Unit with errors.
      * @param string $message Message when the fields explain the failure.
+     * @param \App\Model\Entity\Development $development Development whose labels the messages use.
      * @return void
      */
-    private function fail(Unit $unit, string $message): void
+    private function fail(Unit $unit, string $message, Development $development): void
     {
         if ($unit->getError('development_id') !== []) {
             $this->Flash->error(self::ARCHIVED);
@@ -390,7 +394,10 @@ class UnitsController extends AppController
             $copy = self::ERRORS[$field] ?? [];
             $translated = [];
             foreach (array_keys((array)$rules) as $rule) {
-                $translated[$rule] = $copy[$rule] ?? $copy['*'] ?? 'El valor no es válido.';
+                $translated[$rule] = strtr($copy[$rule] ?? $copy['*'] ?? 'El valor no es válido.', [
+                    '{number}' => mb_strtolower((string)$development->number_label),
+                    '{section}' => mb_strtolower((string)$development->section_label),
+                ]);
             }
             $unit->setError($field, $translated, true);
         }

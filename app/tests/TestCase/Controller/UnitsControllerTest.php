@@ -10,7 +10,6 @@ use Cake\Core\Configure;
 use Cake\Event\EventInterface;
 use Cake\Event\EventManager;
 use Cake\TestSuite\IntegrationTestTrait;
-use Closure;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -26,7 +25,10 @@ class UnitsControllerTest extends DatabaseTestCase
 
     private int $devA;
     private int $devB;
-    private ?Closure $saveListener = null;
+    /**
+     * @var list<\Closure>
+     */
+    private array $saveListeners = [];
     private mixed $debugBefore = null;
 
     protected function setUp(): void
@@ -40,8 +42,8 @@ class UnitsControllerTest extends DatabaseTestCase
 
     protected function tearDown(): void
     {
-        if ($this->saveListener !== null) {
-            EventManager::instance()->off('Model.beforeSave', $this->saveListener);
+        foreach ($this->saveListeners as $listener) {
+            EventManager::instance()->off('Model.beforeSave', $listener);
         }
         Configure::write('debug', $this->debugBefore);
         parent::tearDown();
@@ -80,9 +82,10 @@ class UnitsControllerTest extends DatabaseTestCase
 
     /**
      * What a response tells the client, minus what always differs between two requests: the requested address (the
-     * not-found page echoes it) and the CSRF token and form name of the layout.
+     * not-found page echoes it), the CSRF token and form name of the layout, and the headers that carry a cookie, a
+     * date or the length of a body that echoes the address.
      *
-     * @return array{int, string}
+     * @return array{int, string, array<string, string>}
      */
     private function outcome(): array
     {
@@ -92,8 +95,16 @@ class UnitsControllerTest extends DatabaseTestCase
             ['<url>', 'name="<form>"', '<form>', 'value="<token>"'],
             $body,
         );
+        $headers = [];
+        foreach ($this->_response->getHeaders() as $name => $values) {
+            if (in_array(strtolower($name), ['set-cookie', 'date', 'content-length', 'x-csrf-token'], true)) {
+                continue;
+            }
+            $headers[$name] = implode(', ', $values);
+        }
+        ksort($headers);
 
-        return [$this->_response->getStatusCode(), $body];
+        return [$this->_response->getStatusCode(), $body, $headers];
     }
 
     private function unitCount(?int $development = null): int
@@ -232,6 +243,40 @@ class UnitsControllerTest extends DatabaseTestCase
         $this->assertResponseNotContains('Departamento');
     }
 
+    public function testFieldErrorsAndFormsUseTheDevelopmentsOwnLabels(): void
+    {
+        $this->db()->execute(
+            "UPDATE developments SET section_label = 'Bloque', number_label = 'Lote' WHERE id = ?",
+            [$this->devA],
+        );
+        $block = $this->seedSection($this->devA, 'B-1');
+        $this->seedUnit($this->devA, $block, '7');
+        $other = $this->seedUnit($this->devA, null, '8');
+        $this->signInWith('administrator');
+        $this->enableCsrfToken();
+
+        $this->get($this->base($this->devA));
+        $this->assertResponseContains('Nueva sección (Bloque)');
+
+        foreach ([$this->base($this->devA) . '/add', $this->base($this->devA) . '/' . $other . '/edit'] as $form) {
+            $this->get($form);
+            $this->assertResponseContains('Sin bloque');
+            $this->assertResponseContains('>Lote<');
+            $this->assertResponseNotContains('Sin torre');
+            $this->assertResponseNotContains('Departamento</label>');
+        }
+
+        $this->post($this->base($this->devA) . '/add', $this->payload(['number' => '7', 'section_id' => (string)$block]));
+        $this->assertResponseContains('Ya existe una unidad con ese valor de «lote» para el mismo valor de «bloque» (o sin él).');
+        $this->post($this->base($this->devA) . '/add', $this->payload(['number' => '', 'section_id' => 'abc']));
+        $this->assertResponseContains('Escribe un valor para «lote».');
+        $this->assertResponseContains('Elige un valor válido para «bloque».');
+        $this->post($this->base($this->devA) . '/add', $this->payload(['section_id' => '99999']));
+        $this->assertResponseContains('El valor de «bloque» no existe en este desarrollo.');
+        $this->assertResponseNotContains('torre');
+        $this->assertResponseNotContains('departamento');
+    }
+
     public function testListShowsMixedTypesAndInactiveUnits(): void
     {
         $this->seedUnit($this->devA, null, 'C-1');
@@ -297,9 +342,18 @@ class UnitsControllerTest extends DatabaseTestCase
         $this->get($this->base($this->devA));
 
         $this->assertResponseOk();
-        $this->assertResponseContains('U001');
-        $this->assertResponseNotContains('U120');
-        $this->assertResponseContains('page=2');
+        $body = (string)$this->_response->getBody();
+        $this->assertStringContainsString('U001', $body);
+        $this->assertStringContainsString('U100', $body);
+        $this->assertStringNotContainsString('U101', $body);
+        $this->assertLessThan(strpos($body, 'U002'), strpos($body, 'U001'), 'ordered by number');
+        $this->assertStringContainsString('page=2', $body);
+
+        $this->get($this->base($this->devA) . '?page=2');
+        $second = (string)$this->_response->getBody();
+        $this->assertStringContainsString('U101', $second);
+        $this->assertStringContainsString('U120', $second);
+        $this->assertStringNotContainsString('U100', $second);
     }
 
     // --- open --------------------------------------------------------------------------------------------------
@@ -372,6 +426,55 @@ class UnitsControllerTest extends DatabaseTestCase
         $this->assertTrue((bool)$row['is_active']);
         $this->get($this->base($this->devB) . '/' . $unit);
         $this->assertResponseOk();
+
+        // The answer is the one for a unit that does not exist, headers included.
+        $missing = $unit + 1000;
+        foreach (['get' => '', 'get ' => '/edit', 'post' => '/edit', 'post ' => '/deactivate'] as $verb => $suffix) {
+            $method = trim($verb);
+            $this->$method($this->base($this->devA) . '/' . $unit . $suffix, $method === 'post' ? $this->payload() : []);
+            $foreign = $this->outcome();
+            $this->$method($this->base($this->devA) . '/' . $missing . $suffix, $method === 'post' ? $this->payload() : []);
+            $this->assertSame($this->outcome(), $foreign, $verb . $suffix);
+            $this->assertSame(404, $foreign[0]);
+        }
+    }
+
+    /**
+     * Same user in both developments: nothing is hidden by row-level security or by the scopes, so what makes the
+     * answer for a development that does not exist the same as for an existing one is only the way it is built.
+     */
+    public function testAMissingDevelopmentLooksLikeAnExistingOneForAUserOfBoth(): void
+    {
+        $user = $this->signInWith('administrator');
+        $this->assignRole($user, 'administrator', $this->devB);
+        $this->enableCsrfToken();
+
+        $this->get($this->base($this->devB));
+        $this->assertResponseOk();
+        $this->get($this->base(999999999));
+        $this->assertResponseCode(404);
+        $missingList = $this->outcome();
+        $this->get($this->base('0'));
+        $this->assertSame($missingList, $this->outcome());
+        $this->post($this->base(999999999) . '/add', $this->payload());
+        $missingAdd = $this->outcome();
+        $this->post($this->base(999999999) . '/sections', ['name' => 'X']);
+        $missingSection = $this->outcome();
+        $this->assertSame(404, $missingAdd[0]);
+        $this->assertSame(404, $missingSection[0]);
+        $this->assertSame([], $missingAdd[2] === $missingSection[2] ? [] : ['headers differ']);
+    }
+
+    public function testAnOverflowingUnitIdIsTheSame404AsAMissingOne(): void
+    {
+        $this->signInWith('administrator');
+
+        $this->get($this->base($this->devA) . '/99999999999999999999');
+        $overflow = $this->outcome();
+        $this->get($this->base($this->devA) . '/999999999');
+
+        $this->assertSame(404, $overflow[0]);
+        $this->assertSame($this->outcome(), $overflow);
     }
 
     public function testResidentCannotOpenAUnit(): void
@@ -478,7 +581,7 @@ class UnitsControllerTest extends DatabaseTestCase
         $this->post($this->base($this->devA) . '/add', $this->payload());
 
         $this->assertResponseOk();
-        $this->assertResponseContains('Ya existe una unidad con ese número en esta sección.');
+        $this->assertResponseContains('Ya existe una unidad con ese valor de «departamento» para el mismo valor de «torre» (o sin él).');
         $this->assertResponseContains('No se pudo guardar la unidad.');
         $this->assertSame(1, $this->unitCount($this->devA));
     }
@@ -492,13 +595,16 @@ class UnitsControllerTest extends DatabaseTestCase
             'zero area' => [['lot_area_m2' => '0'], 'El valor debe ser mayor que cero.'],
             'negative area' => [['lot_area_m2' => '-5'], 'El valor debe ser mayor que cero.'],
             'indiviso over 100' => [['indiviso_pct' => '120'], 'El valor no puede ser mayor que 100.'],
+            'area above the column' => [['lot_area_m2' => '10000000000'], 'El valor es demasiado grande.'],
+            'area rounding above the column' => [['lot_area_m2' => '9999999999.995'], 'El valor es demasiado grande.'],
+            'indiviso just above 100' => [['indiviso_pct' => '100.5'], 'El valor no puede ser mayor que 100.'],
             'indiviso zero' => [['indiviso_pct' => '0'], 'El valor debe ser mayor que cero.'],
             'not a number' => [['lot_area_m2' => 'abc'], 'El valor debe ser un número.'],
-            'blank number' => [['number' => '   '], 'Escribe el número.'],
+            'blank number' => [['number' => '   '], 'Escribe un valor para «departamento».'],
             'long number' => [['number' => str_repeat('9', 51)], 'No puede tener más de 50 caracteres.'],
             'unknown type' => [['type' => 'castle'], 'Elige un tipo válido.'],
             'missing type' => [['type' => ''], 'Elige un tipo válido.'],
-            'non-numeric section' => [['section_id' => 'abc'], 'Elige una sección válida.'],
+            'non-numeric section' => [['section_id' => 'abc'], 'Elige un valor válido para «torre».'],
         ];
     }
 
@@ -528,6 +634,22 @@ class UnitsControllerTest extends DatabaseTestCase
         $this->assertRedirect($this->base($this->devA));
     }
 
+    public function testTheLargestAcceptedMeasurementsAreStored(): void
+    {
+        $this->signInWith('administrator');
+        $this->enableCsrfToken();
+
+        $this->post(
+            $this->base($this->devA) . '/add',
+            $this->payload(['lot_area_m2' => '9999999999.99', 'indiviso_pct' => '100']),
+        );
+
+        $this->assertRedirect($this->base($this->devA));
+        $row = $this->unitRow($this->devA, '12');
+        $this->assertSame('9999999999.99', $row['lot_area_m2']);
+        $this->assertSame('100.0000', $row['indiviso_pct']);
+    }
+
     public function testMeasurementsAreStored(): void
     {
         $this->signInWith('administrator');
@@ -552,7 +674,7 @@ class UnitsControllerTest extends DatabaseTestCase
         $this->post($this->base($this->devA) . '/add', $this->payload(['section_id' => (string)$foreign]));
         $foreignBody = $this->outcome();
         $this->assertResponseOk();
-        $this->assertResponseContains('La sección no existe en este desarrollo.');
+        $this->assertResponseContains('El valor de «torre» no existe en este desarrollo.');
         $this->post($this->base($this->devA) . '/add', $this->payload(['section_id' => (string)($foreign + 1000)]));
         $missingBody = $this->outcome();
 
@@ -561,6 +683,38 @@ class UnitsControllerTest extends DatabaseTestCase
             preg_replace('/value="\d+"/', '', $foreignBody[1]),
             preg_replace('/value="\d+"/', '', $missingBody[1]),
         );
+    }
+
+    /**
+     * The user administers both developments, so row-level security shows the section of B. Only the section being
+     * required to belong to the development of the unit (and the form listing only that development's sections)
+     * keeps it out; the rule must refuse before the database does, with the message for a missing section.
+     */
+    public function testASectionOfAnotherDevelopmentOfTheSameUserIsRefusedByTheRuleNotTheDatabase(): void
+    {
+        $user = $this->signInWith('administrator');
+        $this->assignRole($user, 'administrator', $this->devB);
+        $foreign = $this->seedSection($this->devB, 'Torre Ajena');
+        $this->enableCsrfToken();
+        $reachedSave = false;
+        $this->useSaveThat(function () use (&$reachedSave): void {
+            $reachedSave = true;
+        });
+
+        $this->get($this->base($this->devA) . '/add');
+        $this->assertResponseNotContains('Torre Ajena');
+
+        $this->post($this->base($this->devA) . '/add', $this->payload(['section_id' => (string)$foreign]));
+        $foreignOutcome = $this->outcome();
+        $this->post($this->base($this->devA) . '/add', $this->payload(['section_id' => (string)($foreign + 1000)]));
+        $missingOutcome = $this->outcome();
+
+        $this->assertResponseContains('El valor de «torre» no existe en este desarrollo.');
+        $this->assertFalse($reachedSave, 'the rule must refuse before the save reaches the database');
+        $this->assertSame(0, $this->unitCount());
+        $strip = fn(array $o): string => (string)preg_replace('/value="\d+"/', '', $o[1]);
+        $this->assertSame($strip($missingOutcome), $strip($foreignOutcome));
+        $this->assertSame($missingOutcome[2], $foreignOutcome[2]);
     }
 
     public function testABodyDevelopmentIdIsIgnored(): void
@@ -711,7 +865,7 @@ class UnitsControllerTest extends DatabaseTestCase
 
         $this->assertTrue($done);
         $this->assertResponseOk();
-        $this->assertResponseContains('Ya existe una unidad con ese número en esta sección.');
+        $this->assertResponseContains('Ya existe una unidad con ese valor de «departamento» para el mismo valor de «torre» (o sin él).');
         $this->assertSame(1, $this->unitCount($this->devA));
     }
 
@@ -765,6 +919,63 @@ class UnitsControllerTest extends DatabaseTestCase
         $this->assertSame(0, $this->unitCount($this->devB));
     }
 
+    public function testASectionDeletedDuringAnEditIsAFieldErrorOnTheSection(): void
+    {
+        $one = $this->seedSection($this->devA, 'Torre 1');
+        $two = $this->seedSection($this->devA, 'Torre 2');
+        $unit = $this->seedUnit($this->devA, $one, 'A-1');
+        $this->signInWith('administrator');
+        $this->enableCsrfToken();
+        $done = false;
+        $this->useSaveThat(function () use (&$done, $two): void {
+            if (!$done) {
+                $done = true;
+                $this->db()->execute('DELETE FROM sections WHERE id = ?', [$two]);
+            }
+        });
+
+        $this->post($this->base($this->devA) . '/' . $unit . '/edit', $this->payload([
+            'number' => 'A-1', 'section_id' => (string)$two,
+        ]));
+
+        $this->assertTrue($done);
+        $this->assertResponseOk();
+        $this->assertResponseContains('El valor de «torre» no existe en este desarrollo.');
+        $this->assertSame($one, (int)$this->unitRow($this->devA, 'A-1')['section_id']);
+    }
+
+    public function testADevelopmentArchivedDuringAnEditIsShownAsArchived(): void
+    {
+        $unit = $this->seedUnit($this->devA, null, 'A-1');
+        $this->signInWith('administrator');
+        $this->enableCsrfToken();
+        $this->useSaveThat(function (): void {
+            $this->archive($this->devA);
+        });
+
+        $this->post($this->base($this->devA) . '/' . $unit . '/edit', $this->payload(['number' => 'Z']));
+
+        $this->assertResponseOk();
+        $this->assertResponseContains('El desarrollo está archivado: no se pueden guardar cambios.');
+        $this->assertSame('A-1', $this->db()->execute('SELECT number FROM units WHERE id = ?', [$unit])->fetch()[0]);
+    }
+
+    public function testADevelopmentArchivedDuringADeactivationIsShownAsArchived(): void
+    {
+        $unit = $this->seedUnit($this->devA, null, 'A-1');
+        $this->signInWith('administrator');
+        $this->enableCsrfToken();
+        $this->useSaveThat(function (): void {
+            $this->archive($this->devA);
+        });
+
+        $this->post($this->base($this->devA) . '/' . $unit . '/deactivate');
+
+        $this->assertRedirect($this->base($this->devA));
+        $this->assertFlashMessage('El desarrollo está archivado: no se pueden guardar cambios.');
+        $this->assertTrue((bool)$this->unitRow($this->devA, 'A-1')['is_active']);
+    }
+
     public function testEditRejectsADuplicateNumberAndKeepsTheRow(): void
     {
         $this->seedUnit($this->devA, null, 'A-1');
@@ -775,7 +986,7 @@ class UnitsControllerTest extends DatabaseTestCase
         $this->post($this->base($this->devA) . '/' . $unit . '/edit', $this->payload(['number' => 'A-1']));
 
         $this->assertResponseOk();
-        $this->assertResponseContains('Ya existe una unidad con ese número en esta sección.');
+        $this->assertResponseContains('Ya existe una unidad con ese valor de «departamento» para el mismo valor de «torre» (o sin él).');
         $this->assertSame('A-2', $this->db()->execute('SELECT number FROM units WHERE id = ?', [$unit])->fetch()[0]);
     }
 
@@ -905,6 +1116,81 @@ class UnitsControllerTest extends DatabaseTestCase
         $this->assertTrue((bool)$this->unitRow($this->devB, 'B-1')['is_active']);
     }
 
+    private function seedInactiveUnit(int $development, string $number = 'A-1'): int
+    {
+        $id = $this->seedUnit($development, null, $number);
+        $this->db()->execute('UPDATE units SET is_active = false WHERE id = ?', [$id]);
+
+        return $id;
+    }
+
+    #[DataProvider('writeRefused')]
+    public function testRefusedRolesCannotReactivate(string $role, bool $readOnly): void
+    {
+        $unit = $this->seedInactiveUnit($this->devA);
+        $this->signInWith($role, $readOnly);
+        $this->enableCsrfToken();
+
+        $this->post($this->base($this->devA) . '/' . $unit . '/activate');
+
+        $this->assertResponseCode(403);
+        $this->assertFalse((bool)$this->unitRow($this->devA, 'A-1')['is_active']);
+    }
+
+    public function testReactivateInAnArchivedDevelopmentIsRefused(): void
+    {
+        $unit = $this->seedInactiveUnit($this->devA);
+        $this->archive($this->devA);
+        $this->signInWith('administrator');
+        $this->enableCsrfToken();
+
+        $this->post($this->base($this->devA) . '/' . $unit . '/activate');
+
+        $this->assertResponseCode(403);
+        $this->assertFalse((bool)$this->unitRow($this->devA, 'A-1')['is_active']);
+    }
+
+    public function testReactivateOfAForeignUnitIs404LikeAMissingOne(): void
+    {
+        $foreign = $this->seedInactiveUnit($this->devB, 'B-1');
+        $this->signInWith('administrator');
+        $this->enableCsrfToken();
+
+        $this->post($this->base($this->devA) . '/' . $foreign . '/activate');
+        $viaOwnPath = $this->outcome();
+        $this->post($this->base($this->devB) . '/' . $foreign . '/activate');
+        $viaForeignPath = $this->_response->getStatusCode();
+        $this->post($this->base($this->devA) . '/' . ($foreign + 1000) . '/activate');
+
+        $this->assertSame(404, $viaOwnPath[0]);
+        $this->assertSame($this->outcome(), $viaOwnPath);
+        $this->assertSame(404, $viaForeignPath);
+        $this->assertFalse((bool)$this->unitRow($this->devB, 'B-1')['is_active']);
+    }
+
+    public function testReactivateNeedsTheCsrfToken(): void
+    {
+        $unit = $this->seedInactiveUnit($this->devA);
+        $this->signInWith('administrator');
+        $this->_csrfToken = false;
+
+        $this->post($this->base($this->devA) . '/' . $unit . '/activate');
+
+        $this->assertResponseCode(403);
+        $this->assertFalse((bool)$this->unitRow($this->devA, 'A-1')['is_active']);
+    }
+
+    public function testReactivateIsPostOnly(): void
+    {
+        $unit = $this->seedInactiveUnit($this->devA);
+        $this->signInWith('administrator');
+
+        $this->get($this->base($this->devA) . '/' . $unit . '/activate');
+
+        $this->assertResponseCode(404);
+        $this->assertFalse((bool)$this->unitRow($this->devA, 'A-1')['is_active']);
+    }
+
     public function testDeactivateInAnArchivedDevelopmentIsRefused(): void
     {
         $unit = $this->seedUnit($this->devA, null, 'A-1');
@@ -951,6 +1237,26 @@ class UnitsControllerTest extends DatabaseTestCase
         $this->post($this->base($this->devA) . '/sections', ['name' => 'Torre 2']);
         $this->assertFlashMessage('Sección creada.');
         $this->assertSame(2, $this->sectionCount($this->devA));
+    }
+
+    public function testASectionNameTakenOnlyInTheDatabaseIsAFieldError(): void
+    {
+        $this->signInWith('administrator');
+        $this->enableCsrfToken();
+        $done = false;
+        $this->useSaveThat(function () use (&$done): void {
+            if (!$done) {
+                $done = true;
+                $this->seedSection($this->devA, 'Torre 1');
+            }
+        });
+
+        $this->post($this->base($this->devA) . '/sections', ['name' => 'Torre 1']);
+
+        $this->assertTrue($done);
+        $this->assertRedirect($this->base($this->devA));
+        $this->assertFlashMessage('No se pudo guardar la sección: ya existe una con ese nombre.');
+        $this->assertSame(1, $this->sectionCount());
     }
 
     public function testABlankSectionNameIsRefused(): void
@@ -1070,7 +1376,7 @@ class UnitsControllerTest extends DatabaseTestCase
 
         $this->assertTrue($done);
         $this->assertResponseOk();
-        $this->assertResponseContains('La sección no existe en este desarrollo.');
+        $this->assertResponseContains('El valor de «torre» no existe en este desarrollo.');
         $this->assertSame(0, $this->unitCount());
     }
 
@@ -1090,9 +1396,10 @@ class UnitsControllerTest extends DatabaseTestCase
 
     private function useSaveThat(callable $behaviour): void
     {
-        $this->saveListener = function (EventInterface $event) use ($behaviour): void {
+        $listener = function (EventInterface $event) use ($behaviour): void {
             $behaviour();
         };
-        EventManager::instance()->on('Model.beforeSave', ['priority' => 1], $this->saveListener);
+        $this->saveListeners[] = $listener;
+        EventManager::instance()->on('Model.beforeSave', ['priority' => 1], $listener);
     }
 }
