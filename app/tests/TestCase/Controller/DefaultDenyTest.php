@@ -169,4 +169,103 @@ class DefaultDenyTest extends DatabaseTestCase
             'archive POST' => 404, 'unarchive POST' => 404,
         ], fn(int $dev) => $this->assignRole($user, 'administrator', $dev));
     }
+
+    /**
+     * Walk every routed Units action with a fresh development and unit per request, and check the exact status.
+     *
+     * @param array<string, int> $expected Status per `action METHOD`.
+     * @param callable(int): void $prepare Called with each fresh development id before its request.
+     * @return void
+     */
+    private function walkUnitRoutes(array $expected, callable $prepare): void
+    {
+        $debug = Configure::read('debug');
+        Configure::write('debug', false);
+        $walked = [];
+        try {
+            foreach (Router::routes() as $route) {
+                if (($route->defaults['controller'] ?? null) !== 'Units') {
+                    continue;
+                }
+                foreach ((array)($route->defaults['_method'] ?? ['GET']) as $method) {
+                    $key = $route->defaults['action'] . ' ' . $method;
+                    $dev = $this->createDevelopment('Walk ' . count($walked));
+                    $unit = $this->seedUnit($dev, null, '1');
+                    $prepare($dev);
+                    $url = str_replace(['{developmentId}', '{id}'], [(string)$dev, (string)$unit], $route->template);
+                    $method === 'POST' ? $this->post($url, []) : $this->get($url);
+                    $walked[$key] = $this->_response->getStatusCode();
+                }
+            }
+        } finally {
+            Configure::write('debug', $debug);
+        }
+
+        ksort($walked);
+        ksort($expected);
+        $this->assertSame($expected, $walked);
+    }
+
+    public function testEveryRoutedUnitActionAnswersWritersWithItsExactStatus(): void
+    {
+        $user = $this->signInAs('ann');
+
+        $this->walkUnitRoutes([
+            'index GET' => 200, 'view GET' => 200, 'add GET' => 200, 'add POST' => 200, 'edit GET' => 200,
+            'edit POST' => 302, 'activate POST' => 302, 'deactivate POST' => 302, 'addSection POST' => 302,
+        ], fn(int $dev) => $this->assignRole($user, 'data_entry', $dev));
+    }
+
+    public function testEveryRoutedUnitActionLetsAReaderReadAndRefusesItTheWrites(): void
+    {
+        $user = $this->signInAs('ann');
+
+        $this->walkUnitRoutes([
+            'index GET' => 200, 'view GET' => 200, 'add GET' => 403, 'add POST' => 403, 'edit GET' => 403,
+            'edit POST' => 403, 'activate POST' => 403, 'deactivate POST' => 403, 'addSection POST' => 403,
+        ], fn(int $dev) => $this->assignRole($user, 'accountant', $dev));
+    }
+
+    public function testEveryRoutedUnitActionRefusesAResident(): void
+    {
+        $user = $this->signInAs('ann');
+
+        $this->walkUnitRoutes(array_fill_keys([
+            'index GET', 'view GET', 'add GET', 'add POST', 'edit GET', 'edit POST', 'activate POST',
+            'deactivate POST', 'addSection POST',
+        ], 403), fn(int $dev) => $this->assignRole($user, 'resident', $dev));
+    }
+
+    public function testEveryRoutedUnitActionAnswers404ToAnAdministratorOfAnotherDevelopment(): void
+    {
+        $user = $this->signInAs('ann');
+        $other = $this->createDevelopment('Other');
+        $this->assignRole($user, 'administrator', $other);
+
+        $this->walkUnitRoutes(array_fill_keys([
+            'index GET', 'view GET', 'add GET', 'add POST', 'edit GET', 'edit POST', 'activate POST',
+            'deactivate POST', 'addSection POST',
+        ], 404), fn(int $dev) => null);
+    }
+
+    public function testEveryRoutedUnitActionRefusesAUserWithNoAssignment(): void
+    {
+        $this->signInAs('ann');
+
+        $this->walkUnitRoutes(array_fill_keys([
+            'index GET', 'view GET', 'add GET', 'add POST', 'edit GET', 'edit POST', 'activate POST',
+            'deactivate POST', 'addSection POST',
+        ], 403), fn(int $dev) => null);
+    }
+
+    public function testEveryRoutedUnitActionAnswersTheSuperAdministratorWithItsExactStatus(): void
+    {
+        $root = $this->signInAs('root');
+        $this->assignRole($root, 'super_administrator', null);
+
+        $this->walkUnitRoutes([
+            'index GET' => 200, 'view GET' => 200, 'add GET' => 200, 'add POST' => 200, 'edit GET' => 200,
+            'edit POST' => 302, 'activate POST' => 302, 'deactivate POST' => 302, 'addSection POST' => 302,
+        ], fn(int $dev) => null);
+    }
 }
