@@ -31,7 +31,7 @@ class UnitPolicy
      */
     public function canView(IdentityInterface $user, Unit $unit): bool
     {
-        return $this->units->canView($user, $unit->get('development_id'));
+        return $this->units->canView($user, $this->units->developmentOf($unit));
     }
 
     /**
@@ -41,7 +41,7 @@ class UnitPolicy
      */
     public function canAdd(IdentityInterface $user, Unit $unit): bool
     {
-        return $this->units->canWrite($user, $unit->get('development_id'));
+        return $this->units->canWrite($user, $this->units->developmentOf($unit));
     }
 
     /**
@@ -51,6 +51,6 @@ class UnitPolicy
      */
     public function canEdit(IdentityInterface $user, Unit $unit): bool
     {
-        return $this->units->canWrite($user, $unit->get('development_id'));
+        return $this->units->canWrite($user, $this->units->developmentOf($unit));
     }
 }

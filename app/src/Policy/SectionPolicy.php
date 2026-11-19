@@ -31,7 +31,7 @@ class SectionPolicy
      */
     public function canView(IdentityInterface $user, Section $section): bool
     {
-        return $this->units->canView($user, $section->get('development_id'));
+        return $this->units->canView($user, $this->units->developmentOf($section));
     }
 
     /**
@@ -41,7 +41,7 @@ class SectionPolicy
      */
     public function canAdd(IdentityInterface $user, Section $section): bool
     {
-        return $this->units->canWrite($user, $section->get('development_id'));
+        return $this->units->canWrite($user, $this->units->developmentOf($section));
     }
 
     /**
@@ -51,6 +51,6 @@ class SectionPolicy
      */
     public function canEdit(IdentityInterface $user, Section $section): bool
     {
-        return $this->units->canWrite($user, $section->get('development_id'));
+        return $this->units->canWrite($user, $this->units->developmentOf($section));
     }
 }

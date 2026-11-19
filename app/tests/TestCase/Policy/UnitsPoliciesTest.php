@@ -245,4 +245,67 @@ class UnitsPoliciesTest extends DatabaseTestCase
         $this->assertSame($mayRead, $scope->allows($this->development));
         $this->assertSame($role === 'super_administrator' && $mayRead, $scope->allows($other));
     }
+
+    #[DataProvider('entityKinds')]
+    public function testAStoredRowIsJudgedByItsStoredDevelopmentNotByADirtyOne(string $policy, string $entity): void
+    {
+        $other = $this->createDevelopment('Sur');
+        $admin = $this->userWith('administrator');
+        $guard = new $policy();
+
+        // Stored in the administrator's development, then pointed elsewhere in memory: still theirs to edit.
+        $mine = new $entity(['id' => 1, 'development_id' => $this->development]);
+        $mine->setNew(false);
+        $mine->clean();
+        $mine->set('development_id', $other);
+        $this->assertTrue($guard->canEdit($admin, $mine));
+        $this->assertTrue($guard->canView($admin, $mine));
+
+        // Stored in another development, then pointed at theirs in memory: still refused.
+        $foreign = new $entity(['id' => 2, 'development_id' => $other]);
+        $foreign->setNew(false);
+        $foreign->clean();
+        $foreign->set('development_id', $this->development);
+        $this->assertFalse($guard->canEdit($admin, $foreign));
+        $this->assertFalse($guard->canView($admin, $foreign));
+    }
+
+    /**
+     * @return array<string, array{class-string, class-string, mixed, bool}>
+     */
+    public static function routeIds(): array
+    {
+        $cases = [];
+        foreach (self::entityPolicies() as $kind => [$policy, $entity]) {
+            foreach (
+                [
+                    'canonical string' => [true, true], 'leading zero' => ['07', false], 'text' => ['abc', false],
+                    'empty' => ['', false], 'negative' => ['-1', false], 'zero' => ['0', false],
+                    'decimal' => ['1.5', false], 'padded' => [' 1', false], 'huge' => ['99999999999999999999999', false],
+                    'array' => [['1'], false], 'float' => [1.0, false], 'zero int' => [0, false],
+                ] as $name => $case
+            ) {
+                $cases["{$kind}: {$name}"] = [$policy, $entity, $case[0], $case[1]];
+            }
+        }
+
+        return $cases;
+    }
+
+    #[DataProvider('routeIds')]
+    public function testADevelopmentIdOfAnyOtherShapeFailsClosedWithoutATypeError(
+        string $policy,
+        string $entity,
+        mixed $id,
+        bool $allowed,
+    ): void {
+        $root = $this->userWith('super_administrator');
+        $guard = new $policy();
+        $id = $id === true ? (string)$this->development : $id;
+        $row = new $entity(['id' => 1, 'development_id' => $id]);
+
+        $this->assertSame($allowed, $guard->canView($root, $row));
+        $this->assertSame($allowed, $guard->canEdit($root, $row));
+        $this->assertSame($allowed, $guard->canAdd($root, $row));
+    }
 }

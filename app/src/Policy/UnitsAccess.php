@@ -7,6 +7,7 @@ use App\Authorization\AccessControl;
 use App\Authorization\DevelopmentScope;
 use App\Model\Entity\Development;
 use Authorization\IdentityInterface;
+use Cake\Datasource\EntityInterface;
 use Cake\ORM\Locator\LocatorAwareTrait;
 
 /**
@@ -50,12 +51,41 @@ class UnitsAccess
 
     /**
      * @param \Authorization\IdentityInterface $user Identity.
-     * @param int|null $developmentId Development of the row; null (not known) is refused.
+     * @param mixed $developmentId Development of the row, as an id or a route string; anything else is refused.
      * @return bool
      */
-    public function canView(IdentityInterface $user, ?int $developmentId): bool
+    public function canView(IdentityInterface $user, mixed $developmentId): bool
     {
-        return $developmentId !== null && $this->viewScope($user)->allows($developmentId);
+        $id = self::normalize($developmentId);
+
+        return $id !== null && $this->viewScope($user)->allows($id);
+    }
+
+    /**
+     * The development a row is judged by: the stored one for a row read from the database (a changed value in memory
+     * must not change the decision), the current one for a row not yet saved.
+     *
+     * @param \Cake\Datasource\EntityInterface $row Unit or section.
+     * @return mixed
+     */
+    public function developmentOf(EntityInterface $row): mixed
+    {
+        return $row->isNew() ? $row->get('development_id') : $row->getOriginal('development_id');
+    }
+
+    /**
+     * @param mixed $value Candidate development id.
+     * @return int|null A positive integer id, or null for anything else (type juggling never decides access).
+     */
+    private static function normalize(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value > 0 ? $value : null;
+        }
+
+        return is_string($value) && preg_match('/^[1-9][0-9]*$/', $value) === 1 && (string)(int)$value === $value
+            ? (int)$value
+            : null;
     }
 
     /**
@@ -63,11 +93,12 @@ class UnitsAccess
      * `units.manage` scope, with its archive state, and the development policy decides: an archived one refuses all.
      *
      * @param \Authorization\IdentityInterface $user Identity.
-     * @param int|null $developmentId Development of the row; null (not known) is refused.
+     * @param mixed $developmentId Development of the row, as an id or a route string; anything else is refused.
      * @return bool
      */
-    public function canWrite(IdentityInterface $user, ?int $developmentId): bool
+    public function canWrite(IdentityInterface $user, mixed $developmentId): bool
     {
+        $developmentId = self::normalize($developmentId);
         if ($developmentId === null) {
             return false;
         }

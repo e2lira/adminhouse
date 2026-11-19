@@ -35,6 +35,11 @@ class UnitsTablePolicy
     }
 
     /**
+     * Only a gate for the interface (show the add button, answer a bare 403): the table cannot know the development.
+     * It is NOT an authorization to save. A controller MUST authorize the entity itself before saving, with its
+     * development set from the route: `authorize($entity, 'add')` (entity policy), and save under the
+     * `units.manage` scope, never the view scope.
+     *
      * @param \Authorization\IdentityInterface $user Identity.
      * @param mixed $resource Table the row would be added to.
      * @return bool
