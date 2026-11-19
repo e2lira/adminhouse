@@ -100,4 +100,36 @@ class DevelopmentPolicyTest extends DatabaseTestCase
         $this->assertFalse($this->policy->canEdit($this->identity($loner), $this->development($dev)));
         $this->assertFalse($this->policy->canArchive($this->identity($loner), $this->development($dev)));
     }
+
+    /**
+     * @return array<string, array{int, int|null, bool, string, bool}>
+     */
+    public static function superAssignments(): array
+    {
+        // startsInDays, endsInDays, readOnly, user status, expected
+        return [
+            'open' => [-30, null, false, 'active', true],
+            'ends today' => [-30, 0, false, 'active', true],
+            'expired yesterday' => [-30, -1, false, 'active', false],
+            'starts in the future' => [5, null, false, 'active', false],
+            'read-only' => [-30, null, true, 'active', false],
+            'disabled user' => [-30, null, false, 'disabled', false],
+        ];
+    }
+
+    #[DataProvider('superAssignments')]
+    public function testASuperAdministratorIsAllowedOnlyWhileTheAssignmentIsActive(
+        int $startsInDays,
+        ?int $endsInDays,
+        bool $readOnly,
+        string $status,
+        bool $expected,
+    ): void {
+        $dev = $this->createDevelopment('A');
+        $root = $this->createUser('root', null, $status);
+        $this->assignRole($root, 'super_administrator', null, $startsInDays, $endsInDays, $readOnly);
+
+        $this->assertSame($expected, $this->policy->canEdit($this->identity($root), $this->development($dev)));
+        $this->assertSame($expected, $this->policy->canArchive($this->identity($root), $this->development($dev)));
+    }
 }

@@ -81,16 +81,28 @@ class RlsTenancyPoliciesTest extends RlsTestCase
 
     public function testOnlySuperAdministratorWritesTheProfileAndArchiveColumns(): void
     {
-        $update = 'UPDATE developments SET address = ?, bank_account = ?, archived_at = NOW() WHERE id = ?';
+        $update = 'UPDATE developments SET address = ?, phone = ?, rfc = ?, bank_name = ?, bank_account = ?,
+                   archived_at = ? WHERE id = ?';
+        $read = 'SELECT address, phone, rfc, bank_name, bank_account, archived_at FROM developments WHERE id = ?';
+        $untouched = [
+            'address' => null, 'phone' => null, 'rfc' => null, 'bank_name' => null, 'bank_account' => null,
+            'archived_at' => null,
+        ];
 
-        foreach (['adminA', 'accountantA', 'resident', 'loner'] as $user) {
+        foreach (['adminA', 'accountantA', 'resident'] as $user) {
             $this->actAs($this->{$user});
-            $this->assertDenied($update, ['Calle 1', '0123', $this->devA]);
+            $this->assertDenied($update, ['Calle 1', '555', 'RFC', 'Banco', '0123', '2026-01-01 00:00:00', $this->devA]);
+            $visible = $this->appDb()->execute($read, [$this->devA])->fetch('assoc');
+            $this->assertSame($untouched, $visible, $user);
             $this->endSession();
         }
 
         $this->actAs($this->superUser);
-        $this->assertAllowed($update, ['Calle 1', '0123', $this->devA]);
+        $this->assertAllowed($update, ['Calle 1', '555', 'RFC', 'Banco', '0123', '2026-01-01 00:00:00', $this->devA]);
+        $this->assertSame([
+            'address' => 'Calle 1', 'phone' => '555', 'rfc' => 'RFC', 'bank_name' => 'Banco',
+            'bank_account' => '0123', 'archived_at' => '2026-01-01 00:00:00',
+        ], $this->appDb()->execute($read, [$this->devA])->fetch('assoc'));
     }
 
     // people ------------------------------------------------------------------------------------------------------

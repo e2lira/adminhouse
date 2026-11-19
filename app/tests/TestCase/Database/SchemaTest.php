@@ -70,7 +70,7 @@ class SchemaTest extends DatabaseTestCase
             $this->assertSame('text', $table->getColumnType($column), $column);
             $this->assertTrue($table->getColumn($column)['null'], $column);
         }
-        $this->assertSame($table->getColumnType('created'), $table->getColumnType('archived_at'));
+        $this->assertSame('timestampfractional', $table->getColumnType('archived_at'));
         $this->assertTrue($table->getColumn('archived_at')['null']);
     }
 
@@ -91,13 +91,14 @@ class SchemaTest extends DatabaseTestCase
 
     public function testDevelopmentsManageIsInTheCatalogueAndNoRoleHoldsIt(): void
     {
-        $code = $this->db()->execute("SELECT code FROM permissions WHERE code = 'developments.manage'")->fetch()[0];
+        $codes = $this->db()->execute("SELECT code FROM permissions WHERE code = 'developments.manage'")
+            ->fetchAll('assoc');
         $holders = $this->db()->execute(
             "SELECT COUNT(*) FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
              WHERE p.code = 'developments.manage'",
         )->fetch()[0];
 
-        $this->assertSame('developments.manage', $code);
+        $this->assertSame([['code' => 'developments.manage']], $codes);
         $this->assertSame(0, (int)$holders);
     }
 
