@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Architecture;
 
+use App\Model\Table\DevelopmentsTable;
 use App\Model\Table\RoleAssignmentsTable;
 use App\Test\Support\Architecture\Fixtures\AliasedScopedTable;
 use App\Test\Support\Architecture\Fixtures\GuardedTable;
@@ -111,6 +112,17 @@ class ScopedTableArchitectureTest extends TestCase
         $roleAssignments = ScopedTableAudit::load([RoleAssignmentsTable::class], $this->getTableLocator())[0];
 
         $this->assertFalse(ScopedTableAudit::isScoped($roleAssignments));
+    }
+
+    public function testDevelopmentsIsScopedByItsOwnIdAndNoAssociationEntersIt(): void
+    {
+        $tables = $this->everyProductionTable();
+        $developments = ScopedTableAudit::load([DevelopmentsTable::class], $this->getTableLocator())[0];
+
+        $this->assertTrue(ScopedTableAudit::isScoped($developments));
+        $this->assertContains('developments', ScopedTableAudit::scopedTableNames($tables));
+        $this->assertSame([], ScopedTableAudit::missingBulkGuard([$developments]));
+        $this->assertSame([], ScopedTableAudit::associationProblems($tables, []));
     }
 
     public function testTheAssociationCheckFailsOnAnUnlistedEntryIntoAScopedTable(): void

@@ -91,17 +91,19 @@ Implementation note (1a-ii): the trait is named `ScopedBulkOperationsTrait` (cod
 - Est. lines: ~250
 
 Tasks:
-- [ ] 3.1 RED: component tests: `for(permission)` returns `DevelopmentScope` from `AccessControl::allowedFor` and is memoized per permission; `development(id, permission)` returns the id or throws NotFound (404) for out-of-scope and nonexistent ids identically.
-- [ ] 3.2 GREEN: `DevelopmentScopeComponent`.
-- [ ] 3.3 RED: `DevelopmentsTable` tests: user of A with `developments.view` lists only A; super sees all including one created after their account; query without scope throws; empty scope returns none and `canIndex` still yields 403.
-- [ ] 3.4 GREEN: add behavior (`field => 'id'`) and `ScopedBulkOperations` to `DevelopmentsTable`; `DevelopmentsTablePolicy::scopeIndex` sets the `developmentScope` option.
-- [ ] 3.5 RED/GREEN: update every existing caller of `DevelopmentsTable` finds (grep via `rg`) to pass a scope; integration test that existing development index still works (AC-MD-2).
-- [ ] 3.6 RED/GREEN: `RoleAssignmentsController::managedDevelopment` uses the component; existing tests stay green. `RoleAssignmentsTable` explicitly not retrofitted; architecture test (from 1a-ii) green.
-- [ ] 3.7 REFACTOR; Docs.
+- [x] 3.1 RED: component tests: `for(permission)` returns `DevelopmentScope` from `AccessControl::allowedFor` and is memoized per permission; `development(id, permission)` returns the id or throws NotFound (404) for out-of-scope and nonexistent ids identically.
+- [x] 3.2 GREEN: `DevelopmentScopeComponent`.
+- [x] 3.3 RED: `DevelopmentsTable` tests: user of A with `developments.view` lists only A; super sees all including one created after their account; query without scope throws; empty scope returns none and `canIndex` still yields 403.
+- [x] 3.4 GREEN: add behavior (`field => 'id'`) and `ScopedBulkOperations` to `DevelopmentsTable`; `DevelopmentsTablePolicy::scopeIndex` sets the `developmentScope` option.
+- [x] 3.5 RED/GREEN: update every existing caller of `DevelopmentsTable` finds (grep via `rg`) to pass a scope; integration test that existing development index still works (AC-MD-2).
+- [x] 3.6 RED/GREEN: `RoleAssignmentsController::managedDevelopment` uses the component; existing tests stay green. `RoleAssignmentsTable` explicitly not retrofitted; architecture test (from 1a-ii) green.
+- [x] 3.7 REFACTOR; Docs.
 
 Verification: phpunit (alone), phpcs. No migration.
 PR description: template; "No database change".
 Rollback boundary: revert PR (restores previous DevelopmentsTable queries); 1a-* unaffected.
+
+Implementation note (1b): `DevelopmentScopeComponent::development()` reads the id through the scoped `Developments` table under the permission's scope, so out-of-scope and nonexistent ids (super-administrators included) share one `NotFoundException`. `RoleAssignmentManager::requireExistingDevelopment` now reads through the scoped table with the actor's scope instead of raw SQL, which resolves the 1a-ii raw-SQL audit finding with no whitelist entry. No association enters `developments`, so the association whitelist did not change.
 
 ---
 

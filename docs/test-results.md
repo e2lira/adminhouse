@@ -109,3 +109,7 @@
 - [2026-11-18] DU-1A-II review round 1: the new tests were seen failing first (changed primary key accepted, statements without the development condition, insertQuery open, audit gaps), then `OK (505 tests, 1783 assertions)` for the full suite run alone; `phpcs` exit 0.
 
 - [2026-11-18] DU-1A-II review round 2: new tests seen failing first (zero-row update looked saved, plain LogicException, overridden `_update` accepted), then `OK (507 tests, 1786 assertions)` for the full suite run alone; `phpcs` exit 0.
+
+- [2026-11-18] DU-1B: new tests seen failing first (component class missing; `DevelopmentsTable` find without scope did not throw and ignored the scope; existing role-assignment controller tests and the raw-SQL architecture test failed once the table was scoped), then `OK (526 tests, 1819 assertions)` for the full suite run alone; `phpcs` exit 0. Tests that prove the application layer open the session of a super-administrator, so row-level security hides nothing and every filtered row is the scope's doing. Not verified: behavior of the scope with real data in a browser; no manual UI check.
+
+- [2026-11-18] DU-1B review round 1: new component tests seen failing first (memo served the wrong or a cached empty scope, malformed ids `1.5` and `01` reached the query); mutation checks: `development()` with an all-development scope made 4 component tests fail, and an existence check that ignored its scope made the manager test fail, both restored; then `OK (547 tests, 1863 assertions)` for the full suite run alone; `phpcs` exit 0.

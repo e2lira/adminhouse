@@ -11,8 +11,8 @@ use Cake\ORM\Query\SelectQuery;
 /**
  * Who may list developments, and which ones (`developments.view`, RB-R3).
  *
- * `canIndex` refuses a user who holds the permission nowhere (403); `scopeIndex` then narrows the query
- * to the developments they may see. Each method asks AccessControl, one query each.
+ * `canIndex` refuses a user who holds the permission nowhere (403); `scopeIndex` then sets the scope on the query,
+ * so the table narrows it to the developments they may see. Each method asks AccessControl, one query each.
  */
 class DevelopmentsTablePolicy
 {
@@ -36,23 +36,15 @@ class DevelopmentsTablePolicy
     }
 
     /**
+     * Hands the user's scope to the query as the `developmentScope` option, which DevelopmentsTable enforces.
+     *
      * @param \Authorization\IdentityInterface $user Identity.
      * @param \Cake\ORM\Query\SelectQuery<mixed> $query Query to narrow.
      * @return \Cake\ORM\Query\SelectQuery<mixed>
      */
     public function scopeIndex(IdentityInterface $user, SelectQuery $query): SelectQuery
     {
-        $scope = $this->scopeFor($user);
-        if ($scope->isAll()) {
-            return $query;
-        }
-
-        $alias = $query->getRepository()->getAlias();
-
-        // "WHERE 1 = 0" when empty: an empty IN () list is not valid SQL.
-        return $scope->isEmpty()
-            ? $query->where('1 = 0')
-            : $query->where([$alias . '.id IN' => $scope->ids()]);
+        return $query->applyOptions(['developmentScope' => $this->scopeFor($user)]);
     }
 
     /**

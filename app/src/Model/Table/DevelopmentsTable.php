@@ -7,9 +7,13 @@ use Cake\ORM\Table;
 
 /**
  * Developments (condominiums and subdivisions) administered in the system.
+ *
+ * Scoped by their own id (AD3): every read needs the `developmentScope` option, and bulk statements are refused.
  */
 class DevelopmentsTable extends Table
 {
+    use ScopedBulkOperationsTrait;
+
     /**
      * @param array<string, mixed> $config Table configuration.
      * @return void
@@ -23,5 +27,6 @@ class DevelopmentsTable extends Table
         $this->setPrimaryKey('id');
 
         $this->addBehavior('Timestamp');
+        $this->addBehavior('DevelopmentScoped', ['field' => 'id']);
     }
 }

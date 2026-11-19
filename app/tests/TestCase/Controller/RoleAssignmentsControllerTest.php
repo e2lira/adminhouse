@@ -139,6 +139,18 @@ class RoleAssignmentsControllerTest extends DatabaseTestCase
         $this->assertSame($normalize($otherBody), $normalize((string)$this->_response->getBody()));
     }
 
+    public function testSuperAdministratorGetsNotFoundForADevelopmentThatDoesNotExist(): void
+    {
+        $root = $this->signInAs('root');
+        $this->assignRole($root, 'super_administrator', null);
+
+        $this->get($this->indexUrl($this->devB));
+        $this->assertResponseOk();
+
+        $this->get($this->indexUrl(999999));
+        $this->assertResponseCode(404);
+    }
+
     /**
      * @return array<string, array{string}>
      */
@@ -240,6 +252,28 @@ class RoleAssignmentsControllerTest extends DatabaseTestCase
         $this->post($this->indexUrl($this->devB), $this->grantData());
 
         $this->assertResponseCode(404);
+        $this->assertSame(1, $this->countAssignments());
+    }
+
+    public function testPostsToAnotherDevelopmentAndToAMissingOneAnswerTheSame(): void
+    {
+        $this->signInAdminOfA();
+        $this->createUser('bob');
+        $this->enableCsrfToken();
+        $normalize = static fn(string $body): string => (string)preg_replace('~/developments/\d+/~', '/developments/N/', $body);
+
+        $answers = [];
+        foreach ([$this->devB, 999999] as $development) {
+            $this->post($this->indexUrl($development), $this->grantData());
+            $add = [$this->_response->getStatusCode(), $normalize((string)$this->_response->getBody())];
+            $this->post($this->endUrl($development, 1), []);
+            $end = [$this->_response->getStatusCode(), $normalize((string)$this->_response->getBody())];
+            $answers[] = [$add, $end];
+        }
+
+        $this->assertSame(404, $answers[0][0][0]);
+        $this->assertSame(404, $answers[0][1][0]);
+        $this->assertSame($answers[0], $answers[1]);
         $this->assertSame(1, $this->countAssignments());
     }
 

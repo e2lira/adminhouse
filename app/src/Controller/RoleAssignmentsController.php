@@ -15,6 +15,8 @@ use Cake\Http\Response;
  *
  * Authorization is the DevelopmentPolicy (`role_assignments.manage` in that development); the rules live in
  * RoleAssignmentManager. A development the user cannot manage answers 404, the same as a missing one.
+ *
+ * @property \App\Controller\Component\DevelopmentScopeComponent $DevelopmentScope
  */
 class RoleAssignmentsController extends AppController
 {
@@ -33,6 +35,16 @@ class RoleAssignmentsController extends AppController
         RoleAssignmentException::ALREADY_ENDED => 'Esa asignación ya terminó.',
         RoleAssignmentException::RULE_VIOLATION => 'No se pudo guardar: la asignación incumple una regla del sistema.',
     ];
+
+    /**
+     * @return void
+     */
+    public function initialize(): void
+    {
+        parent::initialize();
+
+        $this->loadComponent('DevelopmentScope');
+    }
 
     /**
      * @param string|int $developmentId Development id from the URL.
@@ -111,14 +123,15 @@ class RoleAssignmentsController extends AppController
      */
     private function managedDevelopment(int|string $developmentId): Development
     {
-        /** @var \App\Model\Entity\Development|null $development */
-        $development = $this->fetchTable('Developments')
-            ->find()
-            ->where(['Developments.id' => (int)$developmentId])
-            ->first();
-        if ($development === null || !$this->Authorization->can($development, 'manageRoleAssignments')) {
-            throw new NotFoundException();
-        }
+        // The scope of `role_assignments.manage` is the whole rule: a development outside it and a nonexistent one
+        // answer the same 404 (AC-MD-1). The entity is then read under that same scope, and authorize() records the
+        // policy check that default deny requires; it agrees with the scope by construction.
+        $id = $this->DevelopmentScope->development($developmentId, RoleAssignmentManager::PERMISSION);
+        /** @var \App\Model\Entity\Development $development */
+        $development = $this->fetchTable('Developments')->get(
+            $id,
+            developmentScope: $this->DevelopmentScope->for(RoleAssignmentManager::PERMISSION),
+        );
         $this->Authorization->authorize($development, 'manageRoleAssignments');
 
         return $development;

@@ -208,3 +208,7 @@
 | DU-1A-I | developments-units PR 1a-i as three stacked PRs (1 scope stack, 2 scoped reads, 3 scoped writes): scoped behavior, scope stack, scoped save/delete trait, exceptions (openspec tasks 1.1 to 1.14); security review fixes applied. | DONE (pending second review) | build | Claude | 2026-11-18 |
 
 | DU-1A-II | developments-units PR 1a-ii (`feat/du-1a-ii-bulk-guards`): bulk-operations trait and architecture tests for the scope (openspec tasks 2.1 to 2.7). | DONE (pending review) | build | Claude | 2026-11-18 |
+
+| DU-1B | developments-units PR 1b (`feat/du-1b-scope-component`): scope component and `DevelopmentsTable` retrofit (openspec tasks 3.1 to 3.7). | DONE (pending review) | build | Claude | 2026-11-18 |
+
+| DU-1B-R1 | developments-units PR 1b review round 1 fixes (component memo and id guard, RLS-independent tests, existence-check and write-contract tests, single gate in `managedDevelopment`). | DONE (pending review) | build | Claude | 2026-11-18 |
