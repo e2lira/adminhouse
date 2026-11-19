@@ -323,7 +323,9 @@ class RlsTenancyPoliciesTest extends RlsTestCase
     {
         $this->actAs($this->superUser);
 
-        $this->assertCount(11, $this->visibleIds('users'));
+        $all = (int)$this->db()->execute('SELECT COUNT(*) FROM users')->fetch()[0];
+        $this->assertGreaterThan(1, $all);
+        $this->assertCount($all, $this->visibleIds('users'));
     }
 
     public function testDisabledEndedAndFutureAdministratorsSeeNoOneButNotEvenThemselvesWhenDisabled(): void

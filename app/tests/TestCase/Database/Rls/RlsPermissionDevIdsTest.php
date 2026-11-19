@@ -239,6 +239,79 @@ class RlsPermissionDevIdsTest extends RlsTestCase
         $this->assertSame([], $this->permissionDevIds('payments.create'));
     }
 
+    public function testANullCodeGrantsNothing(): void
+    {
+        $this->actAs($this->adminA);
+
+        $this->assertSame([], $this->ids('SELECT unnest(permission_dev_ids(NULL::text))'));
+        // The control: the same session does hold a real code.
+        $this->assertSame([$this->devA], $this->permissionDevIds('payments.create'));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function farTimeZones(): array
+    {
+        // Mexico City is UTC-6: these two sit 20 hours ahead of it and 6 hours behind it, so at any moment of the day
+        // at least one of them is on a different calendar date than the business day.
+        return [
+            'ahead of the business day (UTC+14)' => ['Pacific/Kiritimati'],
+            'behind the business day (UTC-12)' => ['Etc/GMT+12'],
+        ];
+    }
+
+    /**
+     * The window is judged on the business day (`business_today()`), not on the session time zone. Under
+     * `CURRENT_DATE` a session ahead of Mexico City would drop an assignment ending today, and one behind it would
+     * not yet see an assignment starting today.
+     *
+     * @param string $zone Session time zone.
+     * @return void
+     */
+    #[DataProvider('farTimeZones')]
+    public function testTheWindowFollowsTheBusinessDayAndNotTheSessionTimeZone(string $zone): void
+    {
+        $lastDay = $this->createUser('last_day', null);
+        $this->assignRole($lastDay, 'accountant', $this->devA, -30, 0);
+        $firstDay = $this->createUser('first_day', null);
+        $this->assignRole($firstDay, 'accountant', $this->devA, 0);
+        $ended = $this->createUser('ended', null);
+        $this->assignRole($ended, 'accountant', $this->devA, -30, -1);
+        $future = $this->createUser('future', null);
+        $this->assignRole($future, 'accountant', $this->devA, 1);
+
+        $expected = [
+            [$lastDay, [$this->devA]],
+            [$firstDay, [$this->devA]],
+            [$ended, []],
+            [$future, []],
+        ];
+        foreach ($expected as [$user, $developments]) {
+            $this->actAs($user);
+            $this->appDb()->execute("SELECT set_config('timezone', ?, true)", [$zone]);
+
+            $this->assertSame($zone, $this->appDb()->execute('SHOW timezone')->fetch()[0]);
+            $this->assertSame($developments, $this->permissionDevIds('payments.create'), $zone);
+            $this->assertSame($developments, $this->permissionDevIds('reports.view'), $zone);
+            $this->endSession();
+        }
+    }
+
+    public function testTheFarTimeZonesReallyDisagreeWithTheBusinessDay(): void
+    {
+        $disagreements = 0;
+        foreach (['Pacific/Kiritimati', 'Etc/GMT+12'] as $zone) {
+            $this->actAs(null);
+            $this->appDb()->execute("SELECT set_config('timezone', ?, true)", [$zone]);
+            $row = $this->appDb()->execute('SELECT CURRENT_DATE::text, public.business_today()::text')->fetch();
+            $disagreements += $row[0] !== $row[1] ? 1 : 0;
+            $this->endSession();
+        }
+
+        $this->assertGreaterThan(0, $disagreements);
+    }
+
     public function testTheRuntimeRoleMayExecuteItAndPublicMayNot(): void
     {
         $row = $this->db()->execute(
