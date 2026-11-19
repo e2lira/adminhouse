@@ -11,8 +11,9 @@ use Cake\Http\Exception\NotFoundException;
 /**
  * The developments the signed-in user may act on, for the controller to hand to the scoped tables (AD5).
  *
- * `for()` asks AccessControl once per permission and request. `development()` answers 404 for a development outside
- * that scope and for one that does not exist alike, so the response never tells which ids exist (AC-MD-1).
+ * `for()` asks AccessControl once per user and permission. `development()` answers 404 for a development outside
+ * that scope, for one that does not exist and for a malformed id alike, so the response never tells which ids exist
+ * (AC-MD-1).
  *
  * Config: `access`, an AccessControl to use instead of the default one.
  */
@@ -26,28 +27,33 @@ class DevelopmentScopeComponent extends Component
     ];
 
     /**
+     * Scopes already resolved, by `<user id>:<permission>`: the identity is part of the key, so a component that
+     * outlives a change of identity never answers for the previous user.
+     *
      * @var array<string, \App\Authorization\DevelopmentScope>
      */
     private array $scopes = [];
 
     /**
      * @param string $permission Permission code, for example `developments.view`.
-     * @return \App\Authorization\DevelopmentScope Where the user holds it today; empty without an identity.
+     * @return \App\Authorization\DevelopmentScope Where the user holds it today; empty without an identity (that
+     *  answer is never remembered).
      */
     public function for(string $permission): DevelopmentScope
     {
-        if (isset($this->scopes[$permission])) {
-            return $this->scopes[$permission];
-        }
-
         $identity = $this->getController()->getRequest()->getAttribute('identity');
         if ($identity === null) {
-            return $this->scopes[$permission] = DevelopmentScope::none();
+            return DevelopmentScope::none();
         }
 
-        $access = $this->getConfig('access') ?? new AccessControl();
+        $userId = (int)$identity->getIdentifier();
+        $key = $userId . ':' . $permission;
+        if (!isset($this->scopes[$key])) {
+            $access = $this->getConfig('access') ?? new AccessControl();
+            $this->scopes[$key] = $access->allowedFor($userId, $permission);
+        }
 
-        return $this->scopes[$permission] = $access->allowedFor((int)$identity->getIdentifier(), $permission);
+        return $this->scopes[$key];
     }
 
     /**
@@ -58,8 +64,8 @@ class DevelopmentScopeComponent extends Component
      */
     public function development(int|string $developmentId, string $permission): int
     {
-        $id = (int)$developmentId;
-        $found = $this->getController()->fetchTable('Developments')
+        $id = $this->parseId($developmentId);
+        $found = $id === null ? null : $this->getController()->fetchTable('Developments')
             ->find('all', developmentScope: $this->for($permission))
             ->select(['Developments.id'])
             ->where(['Developments.id' => $id])
@@ -69,5 +75,20 @@ class DevelopmentScopeComponent extends Component
         }
 
         return $id;
+    }
+
+    /**
+     * @param string|int $value Id as received.
+     * @return int|null The id when it is a canonical positive integer that fits a bigint, otherwise null.
+     */
+    private function parseId(int|string $value): ?int
+    {
+        $text = (string)$value;
+        // An overflowing number saturates on the cast and no longer matches its text.
+        if (preg_match('/^[1-9][0-9]*$/', $text) !== 1 || (string)(int)$text !== $text) {
+            return null;
+        }
+
+        return (int)$text;
     }
 }
