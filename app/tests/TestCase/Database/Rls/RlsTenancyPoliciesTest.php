@@ -308,6 +308,7 @@ class RlsTenancyPoliciesTest extends RlsTestCase
             [
                 $this->adminA,
                 $this->accountantA,
+                $this->dataEntryA,
                 $this->guardA,
                 $this->resident,
                 $this->disabledAdmin,
@@ -322,7 +323,7 @@ class RlsTenancyPoliciesTest extends RlsTestCase
     {
         $this->actAs($this->superUser);
 
-        $this->assertCount(10, $this->visibleIds('users'));
+        $this->assertCount(11, $this->visibleIds('users'));
     }
 
     public function testDisabledEndedAndFutureAdministratorsSeeNoOneButNotEvenThemselvesWhenDisabled(): void

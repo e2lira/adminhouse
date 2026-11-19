@@ -44,14 +44,14 @@ class RlsAccessPoliciesTest extends RlsTestCase
 
         $developments = array_unique($this->ids('SELECT development_id FROM role_assignments'));
         $this->assertSame([$this->devA], array_values($developments));
-        $this->assertCount(7, $this->visibleIds('role_assignments'));
+        $this->assertCount(8, $this->visibleIds('role_assignments'));
     }
 
     public function testSuperAdministratorSeesEveryAssignment(): void
     {
         $this->actAs($this->superUser);
 
-        $this->assertCount(10 - 1, $this->visibleIds('role_assignments'));
+        $this->assertCount(11 - 1, $this->visibleIds('role_assignments'));
     }
 
     public function testDisabledEndedAndFutureAdministratorsAdministerNothing(): void
