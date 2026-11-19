@@ -12,6 +12,7 @@ PR 1b of `developments-units` (tasks 3.1 to 3.7, AD3 and AD5). It adds `Developm
 |---|---|---|
 | Scope component | `feat(app): add DevelopmentScopeComponent to resolve the scope and answer one 404` | `for(permission)` asks `AccessControl::allowedFor` once per permission and request (memoized) and is empty without an identity. `development(id, permission)` reads the id through the scoped `Developments` table under that scope and throws `NotFoundException` otherwise, so out-of-scope and nonexistent ids, super-administrators included, get the same exception. |
 | Retrofit | `feat(app): scope DevelopmentsTable by id and route role-assignment lookups through the scope` | `DevelopmentsTable` adds the behavior (`field => id`) and `ScopedBulkOperationsTrait`. `DevelopmentsTablePolicy::scopeIndex` now sets the `developmentScope` option instead of adding its own WHERE, so the table enforces it. `RoleAssignmentsController::managedDevelopment` resolves the id through the component and reads the row under the same scope. `RoleAssignmentManager::requireExistingDevelopment` no longer runs `SELECT 1 FROM developments`: it reads through the scoped table with the scope the actor already proved in `requireManage`. |
+| Review round 1 | `fix(app): key the scope memo by identity, validate ids and prove the component without RLS`, `test(app): pin the scoped existence check and the development write contract`, `refactor(app): one authorization path in managedDevelopment and reuse the component scope` | The memo is keyed by user id and permission and never holds the no-identity answer; `development()` accepts only a canonical positive integer within bigint range (anything else is the same bare 404). Component tests now run in a super-administrator session with an injected scope so row-level security cannot hide the result; mutation checks confirmed they fail if `development()` used an all-development scope or the manager's existence check ignored its scope. New tests: read-only and expired assignments, no identity, `updateAll` refusal, a non-all scope cannot create a development, identical 404 on add and end POSTs. `managedDevelopment` has one authorization path; `DevelopmentsController` reuses the component scope. |
 | Docs | `docs: record developments-units PR 1b` | This description, change-log, tasks, progress, test-results, openspec tasks. |
 
 ## How to review
@@ -23,7 +24,7 @@ PR 1b of `developments-units` (tasks 3.1 to 3.7, AD3 and AD5). It adds `Developm
 
 ## Verification
 
-- `vendor/bin/phpunit` (run alone, real PostgreSQL): `OK (526 tests, 1819 assertions)`; the new tests were seen failing first, and the existing role-assignment controller tests and the raw-SQL architecture test failed once the table was scoped, until the callers were updated.
+- `vendor/bin/phpunit` (run alone, real PostgreSQL): `OK (547 tests, 1863 assertions)` after review round 1; the new tests were seen failing first, and the existing role-assignment controller tests and the raw-SQL architecture test failed once the table was scoped, until the callers were updated.
 - `vendor/bin/phpcs`: clean (exit 0)
 - Migrations: none
 - Not verified: no manual check in a browser; behavior under real RLS beyond what the integration tests already exercise (RLS stays unchanged and still bounds every query).
@@ -42,7 +43,7 @@ None.
 - Raw-SQL audit: the 1a-ii scan flagged `SELECT 1 FROM developments` in `RoleAssignmentManager`. It is fixed in code (the query now goes through the scoped table), not whitelisted, and the audit is unchanged.
 - `RoleAssignmentsTable` is deliberately not scoped (AD3): it is the source `AccessControl` reads to compute the scope, and super-administrator rows have a NULL development. No association enters `developments`, so the association whitelist did not change.
 - `RoleAssignmentManager` builds a `DevelopmentsTable` directly on its own connection so an injected connection is honored; the controller uses the table locator.
-- `development()` costs one query per call; `managedDevelopment` then reads the entity (a second query). Acceptable for these low-traffic screens; a later change can return the entity if it matters.
+- `development()` costs one query per call; `managedDevelopment` then reads the entity (a second query). Kept on purpose: the component returns only the id (spec), and the screens are low traffic; a later change can return the entity if it matters.
 - Saving a development through the ORM now requires an all-development operation scope (behavior rule for `field => id`); nothing saves developments through the ORM yet (PR 2a/2b will).
 
 ## Chain context
