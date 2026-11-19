@@ -130,10 +130,14 @@ class DevelopmentsController extends AppController
     {
         $this->request->allowMethod(['post']);
         // Archiving and restoring are the same ability: whoever may archive may unarchive (super-administrator only).
-        $development = $this->managedDevelopment($id, 'archive');
+        // The row is read FOR UPDATE inside the request transaction: a concurrent request that changes the same
+        // development waits here, then sees the new state and takes the no-op branch below. That is the conditional
+        // transition (archive only when active, restore only when archived) without a bulk UPDATE, which the scoped
+        // table refuses; the write itself stays an entity save under the scope.
+        $development = $this->managedDevelopment($id, 'archive', lock: true);
 
         if (($development->archived_at !== null) === $archive) {
-            $this->Flash->success($archive ? 'El desarrollo ya estaba archivado.' : 'El desarrollo no está archivado.');
+            $this->Flash->warning($archive ? 'El desarrollo ya estaba archivado.' : 'El desarrollo no está archivado.');
 
             return $this->redirect('/developments');
         }
@@ -156,14 +160,20 @@ class DevelopmentsController extends AppController
      *
      * @param string|int $id Development id from the URL.
      * @param string $ability Policy ability (`edit` or `archive`).
+     * @param bool $lock Whether to lock the row until the end of the transaction (`FOR UPDATE`).
      * @return \App\Model\Entity\Development
      */
-    private function managedDevelopment(int|string $id, string $ability): Development
+    private function managedDevelopment(int|string $id, string $ability, bool $lock = false): Development
     {
         $scope = $this->DevelopmentScope->for(DevelopmentPolicy::MANAGE);
         $developmentId = $this->DevelopmentScope->development($id, DevelopmentPolicy::MANAGE);
+        $query = $this->Developments->find('all', developmentScope: $scope)
+            ->where(['Developments.id' => $developmentId]);
+        if ($lock) {
+            $query->epilog('FOR UPDATE');
+        }
         /** @var \App\Model\Entity\Development $development */
-        $development = $this->Developments->get($developmentId, developmentScope: $scope);
+        $development = $query->firstOrFail();
         $this->Authorization->authorize($development, $ability);
 
         return $development;

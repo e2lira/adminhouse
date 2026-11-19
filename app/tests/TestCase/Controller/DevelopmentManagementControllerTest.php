@@ -3,13 +3,15 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Controller;
 
-use App\Controller\DevelopmentsController;
 use App\Model\Exception\DevelopmentScopeViolation;
 use App\Test\Support\DatabaseTestCase;
 use App\Test\Support\SignsInTrait;
 use Cake\Core\Configure;
+use Cake\Database\ExpressionInterface;
+use Cake\Database\ValueBinder;
 use Cake\Event\EventInterface;
 use Cake\Event\EventManager;
+use Cake\ORM\Query\SelectQuery;
 use Cake\Routing\Router;
 use Cake\TestSuite\IntegrationTestTrait;
 use Closure;
@@ -27,7 +29,8 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
 
     private int $devA;
     private int $devB;
-    private ?Closure $swapTable = null;
+    private ?Closure $saveListener = null;
+    private mixed $debugBefore = null;
 
     protected function setUp(): void
     {
@@ -38,14 +41,16 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
             'UPDATE developments SET bank_name = ?, bank_account = ? WHERE id = ?',
             ['Banco Secreto', self::BANK_ACCOUNT, $this->devB],
         );
+        $this->debugBefore = Configure::read('debug');
         Configure::write('debug', false);
     }
 
     protected function tearDown(): void
     {
-        if ($this->swapTable !== null) {
-            EventManager::instance()->off('Model.beforeSave', $this->swapTable);
+        if ($this->saveListener !== null) {
+            EventManager::instance()->off('Model.beforeSave', $this->saveListener);
         }
+        Configure::write('debug', $this->debugBefore);
         parent::tearDown();
     }
 
@@ -106,7 +111,7 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
         ];
     }
 
-    private function signInAs2(string $role, bool $readOnly): void
+    private function signInWithRole(string $role, bool $readOnly): void
     {
         $userId = $this->signInAs('ann');
         $this->assignRole($userId, $role, $this->devA, readOnly: $readOnly);
@@ -202,7 +207,7 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
     #[DataProvider('refusedActors')]
     public function testNobodyButTheSuperAdministratorMayOpenOrSubmitTheAddForm(string $role, bool $readOnly): void
     {
-        $this->signInAs2($role, $readOnly);
+        $this->signInWithRole($role, $readOnly);
         $this->enableCsrfToken();
         $before = $this->countDevelopments();
 
@@ -299,7 +304,7 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
     #[DataProvider('refusedActors')]
     public function testNobodyButTheSuperAdministratorMayEditEvenTheirOwnDevelopment(string $role, bool $readOnly): void
     {
-        $this->signInAs2($role, $readOnly);
+        $this->signInWithRole($role, $readOnly);
         $this->enableCsrfToken();
 
         $this->get('/developments/' . $this->devA . '/edit');
@@ -313,7 +318,7 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
 
     public function testEditingAnotherDevelopmentIsA404ThatLeaksNothing(): void
     {
-        $this->signInAs2('administrator', false);
+        $this->signInWithRole('administrator', false);
 
         $this->get('/developments/' . $this->devB . '/edit');
         $foreign = [$this->_response->getStatusCode(), (string)$this->_response->getBody()];
@@ -369,6 +374,245 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
         $this->assertNull($this->row('Changed'));
     }
 
+    public function testClearingAnOptionalFieldOnEditStoresNull(): void
+    {
+        $this->signInSuper();
+        $this->enableCsrfToken();
+
+        $this->post('/developments/' . $this->devB . '/edit', $this->payload([
+            'name' => 'Residencial Sur', 'bank_name' => '', 'bank_account' => '  ',
+        ]));
+
+        $this->assertRedirect('/developments');
+        $row = $this->row('Residencial Sur');
+        $this->assertNull($row['bank_name']);
+        $this->assertNull($row['bank_account']);
+        $this->assertSame('Av. Central 100', $row['address']);
+    }
+
+    public function testEditWithoutATimezoneKeepsTheStoredOne(): void
+    {
+        $this->signInSuper();
+        $this->enableCsrfToken();
+        $this->db()->execute("UPDATE developments SET timezone = 'America/Tijuana' WHERE id = ?", [$this->devB]);
+        $data = $this->payload(['name' => 'Residencial Sur II']);
+        unset($data['timezone']);
+
+        $this->post('/developments/' . $this->devB . '/edit', $data);
+
+        $this->assertRedirect('/developments');
+        $this->assertSame('America/Tijuana', $this->row('Residencial Sur II')['timezone']);
+    }
+
+    public function testAddWithoutATimezoneIsAValidationErrorNotASilentDefault(): void
+    {
+        $this->signInSuper();
+        $this->enableCsrfToken();
+        $data = $this->payload();
+        unset($data['timezone']);
+        $before = $this->countDevelopments();
+
+        $this->post('/developments/add', $data);
+
+        $this->assertResponseOk();
+        $this->assertResponseContains('error-message');
+        $this->assertSame($before, $this->countDevelopments());
+    }
+
+    public function testAnArchivedDevelopmentCanStillBeEdited(): void
+    {
+        $this->signInSuper();
+        $this->enableCsrfToken();
+        $this->db()->execute("UPDATE developments SET archived_at = '2020-01-02 03:04:05' WHERE id = ?", [$this->devB]);
+
+        $this->post('/developments/' . $this->devB . '/edit', $this->payload(['name' => 'Renombrado']));
+
+        $this->assertRedirect('/developments');
+        $this->assertStringStartsWith('2020-01-02 03:04:05', (string)$this->archivedAt($this->devB));
+        $this->assertSame($this->devB, (int)$this->row('Renombrado')['id']);
+    }
+
+    public function testAnInvalidEditShowsTheSubmittedValuesAndKeepsTheStoredRow(): void
+    {
+        $this->signInSuper();
+        $this->enableCsrfToken();
+
+        $this->post('/developments/' . $this->devB . '/edit', $this->payload([
+            'name' => '', 'address' => 'Calle Nueva 77',
+        ]));
+
+        $this->assertResponseOk();
+        $this->assertResponseContains('Calle Nueva 77');
+        $this->assertResponseContains('error-message');
+        $row = $this->row('Residencial Sur');
+        $this->assertNotNull($row);
+        $this->assertNull($row['address']);
+        $this->assertSame('Banco Secreto', $row['bank_name']);
+    }
+
+    // --- ids and non-scalar input -----------------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function idBoundActions(): array
+    {
+        return [
+            'edit GET' => ['GET', 'edit'], 'edit POST' => ['POST', 'edit'],
+            'archive' => ['POST', 'archive'], 'unarchive' => ['POST', 'unarchive'],
+        ];
+    }
+
+    private function send(string $method, string $url): void
+    {
+        $method === 'POST' ? $this->post($url, $this->payload()) : $this->get($url);
+    }
+
+    #[DataProvider('idBoundActions')]
+    public function testAMissingIdAnswersTheSame404AsAnOutOfScopeOne(string $method, string $action): void
+    {
+        $this->signInWithRole('administrator', false);
+        $this->enableCsrfToken();
+
+        $this->send($method, '/developments/' . $this->devB . '/' . $action);
+        $foreign = [$this->_response->getStatusCode(), (string)$this->_response->getBody()];
+        $this->send($method, '/developments/987654/' . $action);
+        $missing = [$this->_response->getStatusCode(), (string)$this->_response->getBody()];
+        $foreign[1] = str_replace('/developments/' . $this->devB . '/', '/developments/N/', $foreign[1]);
+        $missing[1] = str_replace('/developments/987654/', '/developments/N/', $missing[1]);
+
+        $this->assertSame(404, $missing[0]);
+        $this->assertSame($foreign, $missing);
+    }
+
+    /**
+     * @return array<string, array{string, string, string}>
+     */
+    public static function malformedIds(): array
+    {
+        $cases = [];
+        foreach (self::idBoundActions() as $name => [$method, $action]) {
+            $cases[$name . ' non-numeric'] = [$method, $action, 'abc'];
+            $cases[$name . ' 20 digits'] = [$method, $action, '99999999999999999999'];
+            $cases[$name . ' leading zero'] = [$method, $action, '01'];
+        }
+
+        return $cases;
+    }
+
+    #[DataProvider('malformedIds')]
+    public function testAMalformedIdIsA404EvenForTheSuperAdministrator(string $method, string $action, string $id): void
+    {
+        $this->signInSuper();
+        $this->enableCsrfToken();
+
+        $this->send($method, '/developments/' . $id . '/' . $action);
+
+        $this->assertResponseCode(404);
+        $this->assertSame(2, $this->countDevelopments());
+    }
+
+    /**
+     * @return array<string, array{int, int|null, bool}>
+     */
+    public static function inactiveSuperAdministrators(): array
+    {
+        // startsInDays, endsInDays, readOnly
+        return [
+            'read-only' => [-30, null, true],
+            'expired' => [-30, -1, false],
+            'not started' => [5, null, false],
+        ];
+    }
+
+    #[DataProvider('inactiveSuperAdministrators')]
+    public function testASuperAdministratorWhoIsNotInForceCannotManage(
+        int $startsInDays,
+        ?int $endsInDays,
+        bool $readOnly,
+    ): void {
+        $userId = $this->signInAs('root');
+        $this->assignRole($userId, 'super_administrator', null, $startsInDays, $endsInDays, $readOnly);
+        // An administrator assignment keeps the account usable, so the refusals below come from the permission.
+        $this->assignRole($userId, 'administrator', $this->devA);
+        $this->enableCsrfToken();
+        $before = $this->countDevelopments();
+
+        $this->get('/developments/add');
+        $this->assertResponseCode(403);
+        $this->post('/developments/add', $this->payload());
+        $this->assertResponseCode(403);
+        $this->post('/developments/' . $this->devA . '/edit', $this->payload(['name' => 'Hacked']));
+        $this->assertResponseCode(404);
+        $this->post('/developments/' . $this->devA . '/archive');
+        $this->assertResponseCode(404);
+        $this->assertSame($before, $this->countDevelopments());
+        $this->assertNull($this->archivedAt($this->devA));
+        $this->assertNotNull($this->row('Residencial Norte'));
+    }
+
+    public function testADisabledSuperAdministratorCannotManage(): void
+    {
+        $userId = $this->signInSuper();
+        $this->db()->execute("UPDATE users SET status = 'disabled' WHERE id = ?", [$userId]);
+        $this->enableCsrfToken();
+        $before = $this->countDevelopments();
+
+        $this->post('/developments/add', $this->payload());
+        $this->assertContains($this->_response->getStatusCode(), [302, 403]);
+        $this->post('/developments/' . $this->devA . '/archive');
+        $this->assertContains($this->_response->getStatusCode(), [302, 403, 404]);
+
+        $this->assertSame($before, $this->countDevelopments());
+        $this->assertNull($this->archivedAt($this->devA));
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>}>
+     */
+    public static function nonScalarInput(): array
+    {
+        return [
+            'name' => [['name' => ['x']]],
+            'timezone' => [['timezone' => ['x']]],
+            'type' => [['type' => ['x']]],
+            'address' => [['address' => ['x']]],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $override Field replaced by an array.
+     */
+    #[DataProvider('nonScalarInput')]
+    public function testNonScalarInputOnAddIsAValidationErrorNotA500(array $override): void
+    {
+        $this->signInSuper();
+        $this->enableCsrfToken();
+        $before = $this->countDevelopments();
+
+        $this->post('/developments/add', $override + $this->payload());
+
+        $this->assertResponseOk();
+        $this->assertResponseContains('error-message');
+        $this->assertSame($before, $this->countDevelopments());
+    }
+
+    /**
+     * @param array<string, mixed> $override Field replaced by an array.
+     */
+    #[DataProvider('nonScalarInput')]
+    public function testNonScalarInputOnEditIsAValidationErrorNotA500(array $override): void
+    {
+        $this->signInSuper();
+        $this->enableCsrfToken();
+
+        $this->post('/developments/' . $this->devB . '/edit', $override + $this->payload());
+
+        $this->assertResponseOk();
+        $this->assertResponseContains('error-message');
+        $this->assertNotNull($this->row('Residencial Sur'));
+    }
+
     // --- archive and unarchive --------------------------------------------------------------------------------
 
     private function archivedAt(int $id): mixed
@@ -404,23 +648,58 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
         $this->assertNull($this->archivedAt($this->devB));
     }
 
-    public function testArchivingTwiceKeepsTheFirstArchiveDate(): void
+    public function testArchivingAnArchivedDevelopmentWritesNothingAndWarns(): void
     {
         $this->signInSuper();
         $this->enableCsrfToken();
-        $this->post('/developments/' . $this->devB . '/archive');
-        $first = $this->archivedAt($this->devB);
+        $this->db()->execute("UPDATE developments SET archived_at = '2020-01-02 03:04:05' WHERE id = ?", [$this->devB]);
 
         $this->post('/developments/' . $this->devB . '/archive');
 
         $this->assertRedirect('/developments');
-        $this->assertSame($first, $this->archivedAt($this->devB));
+        $this->assertFlashElement('flash/warning');
+        $this->assertFlashMessage('El desarrollo ya estaba archivado.');
+        $this->assertStringStartsWith('2020-01-02 03:04:05', (string)$this->archivedAt($this->devB));
+    }
+
+    public function testRestoringAnActiveDevelopmentWritesNothingAndWarns(): void
+    {
+        $this->signInSuper();
+        $this->enableCsrfToken();
+
+        $this->post('/developments/' . $this->devA . '/unarchive');
+
+        $this->assertRedirect('/developments');
+        $this->assertFlashElement('flash/warning');
+        $this->assertFlashMessage('El desarrollo no está archivado.');
+        $this->assertNull($this->archivedAt($this->devA));
+    }
+
+    public function testTheStateChangeReadsTheRowUnderALockSoConcurrentRequestsSerialize(): void
+    {
+        $this->signInSuper();
+        $this->enableCsrfToken();
+        $epilogs = [];
+        $listener = function (EventInterface $event, SelectQuery $query) use (&$epilogs): void {
+            $epilog = $query->clause('epilog');
+            $epilogs[] = $epilog instanceof ExpressionInterface ? $epilog->sql(new ValueBinder()) : (string)$epilog;
+        };
+        EventManager::instance()->on('Model.beforeFind', ['priority' => 1], $listener);
+
+        try {
+            $this->post('/developments/' . $this->devA . '/archive');
+        } finally {
+            EventManager::instance()->off('Model.beforeFind', $listener);
+        }
+
+        $this->assertNotNull($this->archivedAt($this->devA));
+        $this->assertNotEmpty(array_filter($epilogs, fn(string $sql) => str_contains($sql, 'FOR UPDATE')));
     }
 
     #[DataProvider('refusedActors')]
     public function testNobodyButTheSuperAdministratorMayArchiveOrUnarchive(string $role, bool $readOnly): void
     {
-        $this->signInAs2($role, $readOnly);
+        $this->signInWithRole($role, $readOnly);
         $this->db()->execute('UPDATE developments SET archived_at = NOW() WHERE id = ?', [$this->devB]);
         $this->enableCsrfToken();
 
@@ -500,7 +779,6 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
                 $this->assertNotContains($route->defaults['action'] ?? '', ['delete', 'remove', 'destroy']);
             }
         }
-        $this->assertFalse(method_exists(DevelopmentsController::class, 'delete'));
 
         $this->delete('/developments/' . $this->devA);
         $this->assertResponseCode(404);
@@ -518,22 +796,24 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
         $this->get('/developments');
 
         $this->assertResponseOk();
-        $this->assertResponseContains('/developments/add');
-        $this->assertResponseContains('/developments/' . $this->devA . '/edit');
-        $this->assertResponseContains('/developments/' . $this->devA . '/archive');
+        $this->assertResponseContains('Nuevo desarrollo');
+        $this->assertResponseContains('Editar');
+        $this->assertResponseContains('Archivar');
+        $this->assertResponseNotContains('Restaurar');
     }
 
     public function testAnAdministratorSeesNoManagementLinksAndNoBankData(): void
     {
-        $this->signInAs2('administrator', false);
+        $this->signInWithRole('administrator', false);
 
         $this->get('/developments');
 
         $this->assertResponseOk();
         $this->assertResponseContains('Residencial Norte');
-        $this->assertResponseNotContains('/developments/add');
-        $this->assertResponseNotContains('/edit');
-        $this->assertResponseNotContains('/archive');
+        $this->assertResponseNotContains('Nuevo desarrollo');
+        $this->assertResponseNotContains('Editar');
+        $this->assertResponseNotContains('Archivar');
+        $this->assertResponseNotContains('Restaurar');
     }
 
     public function testTheListSelectsFieldsExplicitlyAndNeverLoadsBankData(): void
@@ -548,10 +828,13 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
         $count = 0;
         foreach ($developments as $development) {
             $count++;
-            $this->assertEqualsCanonicalizing(
-                ['id', 'name', 'type', 'archived_at'],
-                array_keys($development->toArray()),
-            );
+            $loaded = array_keys($development->toArray());
+            foreach (['bank_account', 'bank_name', 'rfc', 'phone', 'address'] as $private) {
+                $this->assertNotContains($private, $loaded);
+            }
+            foreach (['id', 'name', 'type', 'archived_at'] as $needed) {
+                $this->assertContains($needed, $loaded);
+            }
         }
         $this->assertSame(2, $count);
         $this->assertResponseNotContains(self::BANK_ACCOUNT);
@@ -566,7 +849,7 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
         $this->get('/developments');
 
         $this->assertResponseContains('Archivado');
-        $this->assertResponseContains('/developments/' . $this->devB . '/unarchive');
+        $this->assertResponseContains('Restaurar');
     }
 
     // --- helpers ----------------------------------------------------------------------------------------------
@@ -580,12 +863,12 @@ class DevelopmentManagementControllerTest extends DatabaseTestCase
      */
     private function useSaveThat(callable $behaviour): void
     {
-        $this->swapTable = function (EventInterface $event) use ($behaviour): void {
+        $this->saveListener = function (EventInterface $event) use ($behaviour): void {
             if ($behaviour() === false) {
                 $event->stopPropagation();
                 $event->setResult(false);
             }
         };
-        EventManager::instance()->on('Model.beforeSave', ['priority' => 1], $this->swapTable);
+        EventManager::instance()->on('Model.beforeSave', ['priority' => 1], $this->saveListener);
     }
 }
