@@ -179,6 +179,51 @@ class AccessControlTest extends DatabaseTestCase
         $this->assertSame($expected, array_column($rows, 'code'));
     }
 
+    public function testNoRoleHoldsDevelopmentsManageAndOnlyTheSuperAdministratorIsGrantedIt(): void
+    {
+        $dev = $this->createDevelopment('A');
+        $root = $this->createUser('root');
+        $this->assignRole($root, 'super_administrator', null);
+
+        $this->assertTrue($this->access->allowedFor($root, 'developments.manage')->isAll());
+
+        foreach (['administrator', 'accountant', 'data_entry', 'supervisor', 'guard', 'resident'] as $role) {
+            $user = $this->createUser('u_' . $role);
+            $this->assignRole($user, $role, $dev);
+            $this->assertTrue($this->access->allowedFor($user, 'developments.manage')->isEmpty(), $role);
+        }
+    }
+
+    /**
+     * @return array<string, array{int, int|null, bool, string, bool}>
+     */
+    public static function superAssignmentsForManage(): array
+    {
+        // startsInDays, endsInDays, readOnly, user status, expected
+        return [
+            'open' => [-30, null, false, 'active', true],
+            'ends today' => [-30, 0, false, 'active', true],
+            'expired' => [-30, -1, false, 'active', false],
+            'future' => [5, null, false, 'active', false],
+            'read-only' => [-30, null, true, 'active', false],
+            'disabled user' => [-30, null, false, 'disabled', false],
+        ];
+    }
+
+    #[DataProvider('superAssignmentsForManage')]
+    public function testDevelopmentsManageFollowsTheSuperAdministratorAssignment(
+        int $startsInDays,
+        ?int $endsInDays,
+        bool $readOnly,
+        string $status,
+        bool $expected,
+    ): void {
+        $user = $this->createUser('root', null, $status);
+        $this->assignRole($user, 'super_administrator', null, $startsInDays, $endsInDays, $readOnly);
+
+        $this->assertSame($expected, $this->access->allowedFor($user, 'developments.manage')->isAll());
+    }
+
     public function testSuperAdministratorHasNoExplicitRows(): void
     {
         $count = $this->db()->execute(

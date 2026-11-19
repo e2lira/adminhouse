@@ -115,14 +115,14 @@ Implementation note (1b): `DevelopmentScopeComponent::development()` reads the i
 - Est. lines: ~300
 
 Tasks:
-- [ ] 4.1 RED: migration test/RLS test: new columns `address, phone, rfc, bank_name, bank_account text NULL`, `archived_at timestamp NULL` exist; RLS on `developments` unchanged (non-super write still denied); `developments.manage` exists with NO role rows.
-- [ ] 4.2 GREEN: migration (up + down); `down()` removes only its own code/columns (AD6).
-- [ ] 4.3 RED: `AccessControlTest::roleMatrix` updated: `developments.manage` held by no role; super allowed.
-- [ ] 4.4 RED: `DevelopmentsTable` validation tests: five optional fields accepted empty; type, name, labels, timezone required as today.
-- [ ] 4.5 GREEN: validation + entity accessibility.
-- [ ] 4.6 RED: `DevelopmentPolicy::canEdit`, `canArchive` allow only super; administrator, data_entry, read-only refused (DM scenarios). Also `canManageUnits/People/Occupancies` skeletons are added in later PRs when used (not here).
-- [ ] 4.7 GREEN: policy methods.
-- [ ] 4.8 Migration up/down/up on a clean DB; Docs.
+- [x] 4.1 RED: migration test/RLS test: new columns `address, phone, rfc, bank_name, bank_account text NULL`, `archived_at timestamp NULL` exist; RLS on `developments` unchanged (non-super write still denied); `developments.manage` exists with NO role rows.
+- [x] 4.2 GREEN: migration (up + down); `down()` removes only its own code/columns (AD6).
+- [x] 4.3 RED: `AccessControlTest::roleMatrix` updated: `developments.manage` held by no role; super allowed.
+- [x] 4.4 RED: `DevelopmentsTable` validation tests: five optional fields accepted empty; type, name, labels, timezone required as today.
+- [x] 4.5 GREEN: validation + entity accessibility.
+- [x] 4.6 RED: `DevelopmentPolicy::canEdit`, `canArchive` allow only super; administrator, data_entry, read-only refused (DM scenarios). Also `canManageUnits/People/Occupancies` skeletons are added in later PRs when used (not here).
+- [x] 4.7 GREEN: policy methods.
+- [x] 4.8 Migration up/down/up on a clean DB; Docs.
 
 Verification: phpunit (alone), phpcs, migration `bin/cake migrations migrate`, `rollback`, `migrate` (run from `app`).
 PR description: template; Database change: describe added nullable columns and permission row; state `down()` verified.
@@ -136,6 +136,11 @@ Rollback boundary: roll back migration then revert PR.
 - Goal: add/edit/archive/unarchive screens for super only.
 - Satisfies: DM all requirements, AC-MD-1/2, labels part of AC-MD-3 (AD5, W-E).
 - Est. lines: ~380 (fallback split: 2b-i add/edit, 2b-ii archive/unarchive)
+
+Notes from review of PR 2a (carry into 2b):
+- `timezone` is required on create (validation); the add form must default it to `America/Mexico_City`.
+- Save results must be asserted: a `false` or 0-row save (the scoped update throws or returns false) must surface as an error, never as a success flash.
+- `bank_account`, `rfc` and `phone` are readable by every role that sees the development at the database level (coarse model). Read screens must select fields explicitly; which roles see the bank fields is a pending product decision.
 
 Tasks:
 - [ ] 5.1 RED: integration tests: super creates with and without optional fields (AC-MD-2); administrator, data_entry, read-only get refused on add/edit/archive; non-super opening edit of B gets 404; no delete route exists (router assertion).
@@ -348,3 +353,5 @@ Tasks:
 Verification: phpunit (alone), phpcs. Final full-suite run.
 PR description: template; "No database change"; what was not verified: resident sub-scope (deferred, D7).
 Rollback boundary: revert PR; DB layers (5a, 5b) remain inert.
+
+Implementation note (2a): migration `20261120000001_AddDevelopmentProfileAndManagePermission` adds the five text columns, `archived_at` and the `developments.manage` permission row (no role rows); `down()` removes only those. RLS is untouched (column-agnostic policies and a table-level grant cover the new columns; a new RLS test proves non-super writes of the profile and archive columns are denied). `DevelopmentsTable::validationDefault` requires type (condominium or subdivision), name, section and number labels and a known time zone, and leaves the five profile fields optional; `Development` keeps `id` and `archived_at` out of mass assignment (archiving is its own action in 2b). `DevelopmentPolicy::canEdit` and `canArchive` ask `AccessControl` for `developments.manage` (one mechanism, AD6): only the super-administrator holds it. Migrate, rollback and migrate were run on the development database `kualitet_app` with the `migrations` connection and on a rebuilt test database.

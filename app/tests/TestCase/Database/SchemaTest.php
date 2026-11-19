@@ -62,6 +62,46 @@ class SchemaTest extends DatabaseTestCase
         $this->assertContains('password_hash', $schema->describe('user_credentials')->columns());
     }
 
+    public function testDevelopmentsHaveTheOptionalProfileAndArchiveColumns(): void
+    {
+        $table = $this->db()->getSchemaCollection()->describe('developments');
+
+        foreach (['address', 'phone', 'rfc', 'bank_name', 'bank_account'] as $column) {
+            $this->assertSame('text', $table->getColumnType($column), $column);
+            $this->assertTrue($table->getColumn($column)['null'], $column);
+        }
+        $this->assertSame('timestampfractional', $table->getColumnType('archived_at'));
+        $this->assertTrue($table->getColumn('archived_at')['null']);
+    }
+
+    public function testADevelopmentIsCreatedWithoutProfileFieldsAndNotArchived(): void
+    {
+        $id = $this->createDevelopment('Plain');
+
+        $row = $this->db()->execute(
+            'SELECT address, phone, rfc, bank_name, bank_account, archived_at FROM developments WHERE id = ?',
+            [$id],
+        )->fetch('assoc');
+
+        $this->assertSame([
+            'address' => null, 'phone' => null, 'rfc' => null,
+            'bank_name' => null, 'bank_account' => null, 'archived_at' => null,
+        ], $row);
+    }
+
+    public function testDevelopmentsManageIsInTheCatalogueAndNoRoleHoldsIt(): void
+    {
+        $codes = $this->db()->execute("SELECT code FROM permissions WHERE code = 'developments.manage'")
+            ->fetchAll('assoc');
+        $holders = $this->db()->execute(
+            "SELECT COUNT(*) FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
+             WHERE p.code = 'developments.manage'",
+        )->fetch()[0];
+
+        $this->assertSame([['code' => 'developments.manage']], $codes);
+        $this->assertSame(0, (int)$holders);
+    }
+
     public function testDevelopmentTypeIsRestricted(): void
     {
         $this->expectException(PDOException::class);
