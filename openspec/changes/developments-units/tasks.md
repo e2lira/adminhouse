@@ -143,12 +143,12 @@ Notes from review of PR 2a (carry into 2b):
 - `bank_account`, `rfc` and `phone` are readable by every role that sees the development at the database level (coarse model). Read screens must select fields explicitly; which roles see the bank fields is a pending product decision.
 
 Tasks:
-- [ ] 5.1 RED: integration tests: super creates with and without optional fields (AC-MD-2); administrator, data_entry, read-only get refused on add/edit/archive; non-super opening edit of B gets 404; no delete route exists (router assertion).
-- [ ] 5.2 GREEN: `DevelopmentsController` add/edit, templates (Spanish copy), explicit routes `[0-9]+`.
-- [ ] 5.3 RED/GREEN: archive and unarchive actions (POST only): archive sets `archived_at`, keeps data; unarchive super only.
-- [ ] 5.4 RED/GREEN (W-E): `DevelopmentPolicy::canManageUnits/People/Occupancies` return false when archived, INCLUDING for super-administrator (decision: super must unarchive first; policy-level refusal consistent with "only super unarchives"). Tests: archived dev refuses admin, data_entry and super for these abilities; unarchived allows.
-- [ ] 5.5 RED/GREEN: default-deny walk covers the new actions (DefaultDeny test).
-- [ ] 5.6 REFACTOR; Docs; add the W-E decision to the change-log.
+- [x] 5.1 RED: integration tests: super creates with and without optional fields (AC-MD-2); administrator, data_entry, read-only get refused on add/edit/archive; non-super opening edit of B gets 404; no delete route exists (router assertion).
+- [x] 5.2 GREEN: `DevelopmentsController` add/edit, templates (Spanish copy), explicit routes `[0-9]+`.
+- [x] 5.3 RED/GREEN: archive and unarchive actions (POST only): archive sets `archived_at`, keeps data; unarchive super only.
+- [x] 5.4 RED/GREEN (W-E): `DevelopmentPolicy::canManageUnits/People/Occupancies` return false when archived, INCLUDING for super-administrator (decision: super must unarchive first; policy-level refusal consistent with "only super unarchives"). Tests: archived dev refuses admin, data_entry and super for these abilities; unarchived allows.
+- [x] 5.5 RED/GREEN: default-deny walk covers the new actions (DefaultDeny test).
+- [x] 5.6 REFACTOR; Docs; add the W-E decision to the change-log.
 
 Verification: phpunit (alone), phpcs.
 PR description: template; "No database change"; not verified: archived-write refusal at DB level (RLS layer comes in 3a-i and is coarse by design).
