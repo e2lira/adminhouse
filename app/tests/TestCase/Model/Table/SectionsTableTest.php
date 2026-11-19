@@ -154,7 +154,8 @@ class SectionsTableTest extends DatabaseTestCase
         return [
             'plain' => ['Torre A', true],
             'accented' => ['Privada Águila', true],
-            'at the limit' => [str_repeat('a', 150), true],
+            'at the limit' => [str_repeat('a', 150), true], 'multibyte at the limit' => [str_repeat('á', 150), true],
+            'multibyte over the limit' => [str_repeat('á', 151), false],
             'over the limit' => [str_repeat('a', 151), false],
             'empty' => ['', false],
             'blank' => ['   ', false],

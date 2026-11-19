@@ -186,7 +186,8 @@ class UnitsTableTest extends DatabaseTestCase
         return [
             'plain' => ['101', true],
             'letters' => ['Lote 7-B', true],
-            'at the limit' => [str_repeat('9', 50), true],
+            'at the limit' => [str_repeat('9', 50), true], 'multibyte at the limit' => [str_repeat('á', 50), true],
+            'multibyte over the limit' => [str_repeat('á', 51), false],
             'over the limit' => [str_repeat('9', 51), false],
             'empty' => ['', false],
             'blank' => ['   ', false],
@@ -238,7 +239,7 @@ class UnitsTableTest extends DatabaseTestCase
             'omitted as null' => [null, true], 'empty string' => ['', true], 'positive' => ['120.5', true],
             'small' => ['0.01', true], 'rounds up to 0.01' => ['0.005', true], 'rounds down to zero' => ['0.004', false], 'float' => [80.25, true], 'largest column value' => ['9999999999.99', true],
             'zero' => ['0', false], 'negative' => ['-1', false], 'NaN' => ['NaN', false], 'text' => ['big', false],
-            'infinity' => ['Infinity', false], 'too many digits' => ['10000000000', false], 'array' => [['1'], false],
+            'infinity' => ['Infinity', false], 'too many digits' => ['10000000000', false], 'rounds past the column' => ['9999999999.995', false], 'array' => [['1'], false],
         ];
     }
 
@@ -259,7 +260,7 @@ class UnitsTableTest extends DatabaseTestCase
             'omitted as null' => [null, true], 'empty string' => ['', true], 'small' => ['0.0001', true], 'rounds to zero' => ['0.00004', false],
             'typical' => ['2.5', true], 'whole' => ['100', true], 'float' => [12.5, true],
             'zero' => ['0', false], 'negative' => ['-5', false], 'above 100' => ['100.0001', false],
-            'one twenty' => ['120', false], 'NaN' => ['NaN', false], 'text' => ['half', false], 'array' => [['1'], false],
+            'one twenty' => ['120', false], 'rounds to 100' => ['100.00004', false], 'NaN' => ['NaN', false], 'text' => ['half', false], 'array' => [['1'], false],
         ];
     }
 
@@ -450,5 +451,135 @@ class UnitsTableTest extends DatabaseTestCase
 
         $this->assertSame('Torre A', $units->first()->section->name);
         $this->assertNull($units->last()->section);
+    }
+
+    /**
+     * @return array<string, array{string, string, string}> Column, input, stored value as text.
+     */
+    public static function acceptedExtremes(): array
+    {
+        return [
+            'area rounds up to 0.01' => ['lot_area_m2', '0.005', '0.01'],
+            'area largest' => ['lot_area_m2', '9999999999.99', '9999999999.99'],
+            'indiviso smallest stored' => ['indiviso_pct', '0.0001', '0.0001'],
+            'indiviso rounds up' => ['indiviso_pct', '0.00005', '0.0001'],
+            'indiviso 100' => ['indiviso_pct', '100', '100.0000'],
+        ];
+    }
+
+    #[DataProvider('acceptedExtremes')]
+    public function testTheAcceptedExtremesAreStoredByTheRealDatabase(string $field, string $input, string $stored): void
+    {
+        $north = $this->createDevelopment('Norte');
+        $this->actAsSuperAdministrator();
+
+        $saved = $this->units->save($this->units->newEntity(self::payload([$field => $input])), $this->saveIn($north));
+        $this->commitSession();
+
+        $this->assertInstanceOf(Unit::class, $saved);
+        $this->assertSame($stored, $this->db()->execute("SELECT {$field}::text FROM units")->fetch()[0]);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function rejectedExtremes(): array
+    {
+        return [
+            'area past the column after rounding' => ['lot_area_m2', '9999999999.995'],
+            'area rounding to zero' => ['lot_area_m2', '0.004'],
+            'indiviso past 100 after rounding' => ['indiviso_pct', '100.00004'],
+            'indiviso rounding to zero' => ['indiviso_pct', '0.00004'],
+        ];
+    }
+
+    #[DataProvider('rejectedExtremes')]
+    public function testTheRejectedExtremesAreFieldErrorsAndNeverReachTheDatabase(string $field, string $input): void
+    {
+        $north = $this->createDevelopment('Norte');
+        $this->actAsSuperAdministrator();
+        $unit = $this->units->newEntity(self::payload([$field => $input]));
+
+        $this->assertFalse($this->units->save($unit, $this->saveIn($north)));
+        $this->assertSame([$field], array_keys($unit->getErrors()));
+    }
+
+    public function testAMatchingDevelopmentInTheBodyIsAcceptedAndNeverAssigned(): void
+    {
+        $north = $this->createDevelopment('Norte');
+
+        $unit = $this->units->newEntity(self::payload(['development_id' => $north]), ['developmentId' => $north]);
+
+        $this->assertSame([], $unit->getErrors());
+        $this->assertNull($unit->get('development_id'));
+    }
+
+    public function testPatchingWithADevelopmentInTheBodyIsCheckedAgainstTheTarget(): void
+    {
+        $north = $this->createDevelopment('Norte');
+        $south = $this->createDevelopment('Sur');
+        $id = $this->seedUnit($north, null, '101');
+        $this->actAsSuperAdministrator();
+        $scope = DevelopmentScope::only([$north, $south]);
+        /** @var \App\Model\Entity\Unit $unit */
+        $unit = $this->units->get($id, developmentScope: $scope);
+        $options = ['developmentId' => $north, 'developmentScope' => $scope];
+
+        $patched = $this->units->patchEntity($unit, ['number' => '102', 'development_id' => $north], $options);
+        $this->assertSame('102', $patched->number);
+        $this->assertSame($north, $patched->development_id);
+        $this->assertFalse($patched->isDirty('development_id'));
+
+        $this->expectException(DevelopmentScopeViolation::class);
+
+        $this->units->patchEntity($unit, ['development_id' => $south], $options);
+    }
+
+    /**
+     * @return array<string, array{mixed}>
+     */
+    public static function badSectionIds(): array
+    {
+        return ['text' => ['abc'], 'array' => [['1']], 'negative' => [-1], 'zero' => [0], 'decimal' => ['1.5']];
+    }
+
+    #[DataProvider('badSectionIds')]
+    public function testAMalformedSectionIdIsAFieldError(mixed $sectionId): void
+    {
+        $unit = $this->units->newEntity(self::payload(['section_id' => $sectionId]));
+
+        $this->assertSame(['section_id'], array_keys($unit->getErrors()));
+    }
+
+    /**
+     * @return array<string, array{mixed}>
+     */
+    public static function badActiveFlags(): array
+    {
+        return ['null' => [null], 'empty' => ['']];
+    }
+
+    #[DataProvider('badActiveFlags')]
+    public function testTheActiveFlagCannotBeNullOrEmpty(mixed $flag): void
+    {
+        $unit = $this->units->newEntity(self::payload(['is_active' => $flag]));
+
+        $this->assertSame(['is_active'], array_keys($unit->getErrors()));
+    }
+
+    public function testMovingAUnitToASectionOfAnotherDevelopmentIsRejected(): void
+    {
+        $north = $this->createDevelopment('Norte');
+        $south = $this->createDevelopment('Sur');
+        $foreign = $this->seedSection($south, 'Torre S');
+        $id = $this->seedUnit($north, null, '101');
+        $this->actAsSuperAdministrator();
+        $scope = DevelopmentScope::only([$north, $south]);
+        /** @var \App\Model\Entity\Unit $unit */
+        $unit = $this->units->get($id, developmentScope: $scope);
+        $moved = $this->units->patchEntity($unit, ['section_id' => $foreign]);
+
+        $this->assertFalse($this->units->save($moved, ['developmentScope' => $scope]));
+        $this->assertArrayHasKey('section_id', $moved->getErrors());
     }
 }

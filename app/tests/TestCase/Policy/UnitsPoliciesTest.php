@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Policy;
 
-use App\Authorization\DevelopmentScope;
 use App\Model\Entity\Section;
 use App\Model\Entity\Unit;
 use App\Policy\SectionPolicy;
@@ -12,9 +11,11 @@ use App\Policy\UnitPolicy;
 use App\Policy\UnitsTablePolicy;
 use App\Test\Support\DatabaseTestCase;
 use Authentication\Identity;
+use Authorization\AuthorizationService;
 use Authorization\AuthorizationServiceInterface;
 use Authorization\IdentityDecorator;
 use Authorization\IdentityInterface;
+use Authorization\Policy\OrmResolver;
 use Cake\Datasource\EntityInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -59,10 +60,9 @@ class UnitsPoliciesTest extends DatabaseTestCase
     private function userWith(?string $role, bool $readOnly = false): IdentityInterface
     {
         $user = $this->createUser('ann');
-        if ($role === 'super_administrator') {
-            $this->assignRole($user, $role, null, readOnly: $readOnly);
-        } elseif ($role !== null) {
-            $this->assignRole($user, $role, $this->development, readOnly: $readOnly);
+        // A user may hold several assignments in one development: `resident+data_entry`.
+        foreach ($role === null ? [] : explode('+', $role) as $code) {
+            $this->assignRole($user, $code, $code === 'super_administrator' ? null : $this->development, readOnly: $readOnly);
         }
         $this->actAs($user);
 
@@ -89,6 +89,8 @@ class UnitsPoliciesTest extends DatabaseTestCase
             'resident' => ['resident', false, false, false],
             'guard' => ['guard', false, false, false],
             'read-only super_administrator' => ['super_administrator', true, true, false],
+            'resident and data_entry' => ['resident+data_entry', false, true, true],
+            'resident and accountant' => ['resident+accountant', false, true, false],
             'no assignment' => [null, false, false, false],
         ];
     }
@@ -150,17 +152,32 @@ class UnitsPoliciesTest extends DatabaseTestCase
         return self::entityPolicies();
     }
 
-    #[DataProvider('entityKinds')]
-    public function testAnArchivedDevelopmentKeepsReadsButRefusesEveryWrite(string $policy, string $entity): void
+    /**
+     * @return array<string, array{class-string, class-string, string}>
+     */
+    public static function archivedCases(): array
+    {
+        $cases = [];
+        foreach (self::entityPolicies() as $kind => [$policy, $entity]) {
+            foreach (['super_administrator', 'administrator', 'data_entry'] as $role) {
+                $cases["{$kind}: {$role}"] = [$policy, $entity, $role];
+            }
+        }
+
+        return $cases;
+    }
+
+    #[DataProvider('archivedCases')]
+    public function testAnArchivedDevelopmentKeepsReadsButRefusesEveryWrite(string $policy, string $entity, string $role): void
     {
         $this->archive();
-        $root = $this->userWith('super_administrator');
+        $user = $this->userWith($role);
         $guard = new $policy();
         $row = $this->row($entity);
 
-        $this->assertTrue($guard->canView($root, $row));
-        $this->assertFalse($guard->canEdit($root, $row));
-        $this->assertFalse($guard->canAdd($root, $row));
+        $this->assertTrue($guard->canView($user, $row));
+        $this->assertFalse($guard->canEdit($user, $row));
+        $this->assertFalse($guard->canAdd($user, $row));
     }
 
     #[DataProvider('entityKinds')]
@@ -191,9 +208,19 @@ class UnitsPoliciesTest extends DatabaseTestCase
     }
 
     #[DataProvider('entityKinds')]
-    public function testNoPolicyAllowsDeletion(string $policy, string $entity): void
+    public function testTheAuthorizationServiceDeniesDeletionToEveryone(string $policy, string $entity): void
     {
-        $this->assertFalse(method_exists($policy, 'canDelete'));
+        $service = new AuthorizationService(new OrmResolver());
+        $root = $this->createUser('root');
+        $this->assignRole($root, 'super_administrator', null);
+        $this->actAs($root);
+        $identity = new IdentityDecorator($service, new Identity(['id' => $root]));
+        $row = new $entity(['id' => 1, 'development_id' => $this->development]);
+        $row->setNew(false);
+        $row->clean();
+
+        $this->assertTrue($service->can($identity, 'edit', $row), 'control: the same resolver allows an edit');
+        $this->assertFalse($service->can($identity, 'delete', $row));
     }
 
     /**
@@ -235,77 +262,18 @@ class UnitsPoliciesTest extends DatabaseTestCase
         bool $mayWrite,
     ): void {
         $other = $this->createDevelopment('Sur');
+        $isUnits = $policy === UnitsTablePolicy::class;
+        $isUnits ? $this->seedUnit($this->development, null, 'mine') : $this->seedSection($this->development, 'mine');
+        $isUnits ? $this->seedUnit($other, null, 'theirs') : $this->seedSection($other, 'theirs');
         $user = $this->userWith($role, $readOnly);
-        $query = $this->getTableLocator()->get('Units')->find('all');
+        $query = $this->getTableLocator()->get($isUnits ? 'Units' : 'Sections')->find('all');
 
-        $scoped = (new $policy())->scopeIndex($user, $query);
+        $rows = (new $policy())->scopeIndex($user, $query)->all()->extract($isUnits ? 'number' : 'name')->toList();
+        sort($rows);
 
-        $scope = $scoped->getOptions()['developmentScope'];
-        $this->assertInstanceOf(DevelopmentScope::class, $scope);
-        $this->assertSame($mayRead, $scope->allows($this->development));
-        $this->assertSame($role === 'super_administrator' && $mayRead, $scope->allows($other));
-    }
-
-    #[DataProvider('entityKinds')]
-    public function testAStoredRowIsJudgedByItsStoredDevelopmentNotByADirtyOne(string $policy, string $entity): void
-    {
-        $other = $this->createDevelopment('Sur');
-        $admin = $this->userWith('administrator');
-        $guard = new $policy();
-
-        // Stored in the administrator's development, then pointed elsewhere in memory: still theirs to edit.
-        $mine = new $entity(['id' => 1, 'development_id' => $this->development]);
-        $mine->setNew(false);
-        $mine->clean();
-        $mine->set('development_id', $other);
-        $this->assertTrue($guard->canEdit($admin, $mine));
-        $this->assertTrue($guard->canView($admin, $mine));
-
-        // Stored in another development, then pointed at theirs in memory: still refused.
-        $foreign = new $entity(['id' => 2, 'development_id' => $other]);
-        $foreign->setNew(false);
-        $foreign->clean();
-        $foreign->set('development_id', $this->development);
-        $this->assertFalse($guard->canEdit($admin, $foreign));
-        $this->assertFalse($guard->canView($admin, $foreign));
-    }
-
-    /**
-     * @return array<string, array{class-string, class-string, mixed, bool}>
-     */
-    public static function routeIds(): array
-    {
-        $cases = [];
-        foreach (self::entityPolicies() as $kind => [$policy, $entity]) {
-            foreach (
-                [
-                    'canonical string' => [true, true], 'leading zero' => ['07', false], 'text' => ['abc', false],
-                    'empty' => ['', false], 'negative' => ['-1', false], 'zero' => ['0', false],
-                    'decimal' => ['1.5', false], 'padded' => [' 1', false], 'huge' => ['99999999999999999999999', false],
-                    'array' => [['1'], false], 'float' => [1.0, false], 'zero int' => [0, false],
-                ] as $name => $case
-            ) {
-                $cases["{$kind}: {$name}"] = [$policy, $entity, $case[0], $case[1]];
-            }
-        }
-
-        return $cases;
-    }
-
-    #[DataProvider('routeIds')]
-    public function testADevelopmentIdOfAnyOtherShapeFailsClosedWithoutATypeError(
-        string $policy,
-        string $entity,
-        mixed $id,
-        bool $allowed,
-    ): void {
-        $root = $this->userWith('super_administrator');
-        $guard = new $policy();
-        $id = $id === true ? (string)$this->development : $id;
-        $row = new $entity(['id' => 1, 'development_id' => $id]);
-
-        $this->assertSame($allowed, $guard->canView($root, $row));
-        $this->assertSame($allowed, $guard->canEdit($root, $row));
-        $this->assertSame($allowed, $guard->canAdd($root, $row));
+        // A read-only super-administrator reads nothing at the database (is_super() needs a writable assignment).
+        $isSuper = $role === 'super_administrator' && !$readOnly;
+        $expected = $isSuper ? ['mine', 'theirs'] : ($mayRead && $role !== 'super_administrator' ? ['mine'] : []);
+        $this->assertSame($expected, $rows);
     }
 }

@@ -113,7 +113,8 @@ class UnitsTable extends Table
 
         $validator
             ->allowEmptyString('section_id')
-            ->integer('section_id');
+            ->integer('section_id')
+            ->greaterThanOrEqual('section_id', 1);
 
         $this->measurement($validator, 'lot_area_m2', self::AREA_MIN, self::AREA_MAX);
         $this->measurement($validator, 'indiviso_pct', self::INDIVISO_MIN, self::INDIVISO_MAX);
