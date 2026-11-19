@@ -124,6 +124,18 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
         $this->assertGreaterThan(0, $id);
     }
 
+    public function testSuperAdministratorCannotGrantInADevelopmentThatDoesNotExist(): void
+    {
+        $before = $this->rows('role_assignments');
+
+        try {
+            $this->grantAs($this->root, 999999, 'bob', 'supervisor');
+            $this->fail('Expected RoleAssignmentNotAllowed');
+        } catch (RoleAssignmentNotAllowed) {
+            $this->assertSame($before, $this->rows('role_assignments'));
+        }
+    }
+
     public function testSuperAdministratorMayGrantAdministrator(): void
     {
         $id = $this->grantAs($this->root, $this->devA, 'bob', 'administrator');

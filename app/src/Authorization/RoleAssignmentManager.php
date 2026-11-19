@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Authorization;
 
 use App\Clock\BusinessClock;
+use App\Model\Table\DevelopmentsTable;
 use Cake\Database\Connection;
 use Cake\Database\Exception\DatabaseException;
 use Cake\Datasource\ConnectionManager;
@@ -183,8 +184,9 @@ class RoleAssignmentManager
         try {
             return $this->connection()->transactional(
                 function () use ($actorId, $developmentId, $username, $roleId, $starts, $ends, $readOnly): int {
-                    $isSuper = $this->requireManage($actorId, $developmentId)->isAll();
-                    $this->requireExistingDevelopment($developmentId);
+                    $scope = $this->requireManage($actorId, $developmentId);
+                    $isSuper = $scope->isAll();
+                    $this->requireExistingDevelopment($developmentId, $scope);
 
                     $role = $this->findRole($roleId);
                     if ($role['code'] === self::SUPER_ADMINISTRATOR) {
@@ -403,17 +405,22 @@ class RoleAssignmentManager
     }
 
     /**
+     * Read through the scoped table, under the actor's own scope: a development the actor cannot manage cannot be
+     * found, and a super-administrator's all-development scope still finds only what exists.
+     *
      * @param int $developmentId Development id.
+     * @param \App\Authorization\DevelopmentScope $scope Scope of the actor for this permission.
      * @return void
+     * @throws \App\Authorization\RoleAssignmentNotAllowed When the development is not found in the scope.
      */
-    private function requireExistingDevelopment(int $developmentId): void
+    private function requireExistingDevelopment(int $developmentId, DevelopmentScope $scope): void
     {
-        $found = $this->connection()->execute(
-            'SELECT 1 FROM developments WHERE id = :id',
-            ['id' => $developmentId],
-            ['id' => 'integer'],
-        )->fetch();
-        if ($found === false) {
+        $developments = new DevelopmentsTable(['connection' => $this->connection()]);
+        $found = $developments->find('all', developmentScope: $scope)
+            ->select(['Developments.id'])
+            ->where(['Developments.id' => $developmentId])
+            ->first();
+        if ($found === null) {
             throw new RoleAssignmentNotAllowed('Unknown development');
         }
     }

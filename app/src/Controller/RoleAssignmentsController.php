@@ -15,6 +15,8 @@ use Cake\Http\Response;
  *
  * Authorization is the DevelopmentPolicy (`role_assignments.manage` in that development); the rules live in
  * RoleAssignmentManager. A development the user cannot manage answers 404, the same as a missing one.
+ *
+ * @property \App\Controller\Component\DevelopmentScopeComponent $DevelopmentScope
  */
 class RoleAssignmentsController extends AppController
 {
@@ -33,6 +35,16 @@ class RoleAssignmentsController extends AppController
         RoleAssignmentException::ALREADY_ENDED => 'Esa asignación ya terminó.',
         RoleAssignmentException::RULE_VIOLATION => 'No se pudo guardar: la asignación incumple una regla del sistema.',
     ];
+
+    /**
+     * @return void
+     */
+    public function initialize(): void
+    {
+        parent::initialize();
+
+        $this->loadComponent('DevelopmentScope');
+    }
 
     /**
      * @param string|int $developmentId Development id from the URL.
@@ -111,12 +123,14 @@ class RoleAssignmentsController extends AppController
      */
     private function managedDevelopment(int|string $developmentId): Development
     {
-        /** @var \App\Model\Entity\Development|null $development */
-        $development = $this->fetchTable('Developments')
-            ->find()
-            ->where(['Developments.id' => (int)$developmentId])
-            ->first();
-        if ($development === null || !$this->Authorization->can($development, 'manageRoleAssignments')) {
+        // Outside the user's scope and nonexistent answer alike (AC-MD-1); the same scope then reads the row.
+        $id = $this->DevelopmentScope->development($developmentId, RoleAssignmentManager::PERMISSION);
+        /** @var \App\Model\Entity\Development $development */
+        $development = $this->fetchTable('Developments')->get(
+            $id,
+            developmentScope: $this->DevelopmentScope->for(RoleAssignmentManager::PERMISSION),
+        );
+        if (!$this->Authorization->can($development, 'manageRoleAssignments')) {
             throw new NotFoundException();
         }
         $this->Authorization->authorize($development, 'manageRoleAssignments');

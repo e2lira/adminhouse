@@ -139,6 +139,18 @@ class RoleAssignmentsControllerTest extends DatabaseTestCase
         $this->assertSame($normalize($otherBody), $normalize((string)$this->_response->getBody()));
     }
 
+    public function testSuperAdministratorGetsNotFoundForADevelopmentThatDoesNotExist(): void
+    {
+        $root = $this->signInAs('root');
+        $this->assignRole($root, 'super_administrator', null);
+
+        $this->get($this->indexUrl($this->devB));
+        $this->assertResponseOk();
+
+        $this->get($this->indexUrl(999999));
+        $this->assertResponseCode(404);
+    }
+
     /**
      * @return array<string, array{string}>
      */
