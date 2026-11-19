@@ -4,6 +4,9 @@ declare(strict_types=1);
 namespace App\Test\TestCase\Model\Table;
 
 use App\Authorization\DevelopmentScope;
+use App\Model\Exception\DevelopmentScopeViolation;
+use App\Model\Exception\MissingDevelopmentScopeException;
+use App\Model\Table\ScopedUpdateQuery;
 use App\Test\Support\ScopedTableTestCase;
 use Cake\ORM\Table;
 use Closure;
@@ -105,7 +108,12 @@ class ScopedBulkOperationsTest extends ScopedTableTestCase
             },
         );
 
-        $this->items->save($mine, ['developmentScope' => DevelopmentScope::only([1])]);
+        try {
+            $this->items->save($mine, ['developmentScope' => DevelopmentScope::only([1])]);
+            $this->fail('An update that reaches no row inside the scope must not look saved.');
+        } catch (DevelopmentScopeViolation) {
+            // Like delete(), which returns false on zero rows, a save that touched nothing is a failure.
+        }
 
         $this->assertSame('theirs', $this->nameOf($theirsId));
     }
@@ -136,6 +144,15 @@ class ScopedBulkOperationsTest extends ScopedTableTestCase
                 (new ReflectionMethod(Table::class, $method))->getDeclaringClass()->getName(),
             );
         }
+    }
+
+    public function testAStatementBuiltWithoutARunningScopeThrowsTheMissingScopeException(): void
+    {
+        $method = new ReflectionMethod($this->items, 'withScopeCondition');
+
+        $this->expectException(MissingDevelopmentScopeException::class);
+
+        $method->invoke($this->items, new ScopedUpdateQuery($this->items));
     }
 
     private function nameOf(int $id): ?string

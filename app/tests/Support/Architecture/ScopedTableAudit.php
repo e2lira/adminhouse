@@ -29,6 +29,11 @@ final class ScopedTableAudit
      */
     private const GUARDED_METHODS = ['updateAll', 'deleteAll', 'insertQuery', 'updateQuery', 'deleteQuery'];
 
+    /**
+     * Methods of the ORM the trait's frame check relies on; a scoped table must not override them.
+     */
+    private const ORM_INTERNALS = ['_update', '_insert', '_processDelete'];
+
     private const TABLE_DIRECTORIES = [
         'production' => ['Model' . DIRECTORY_SEPARATOR . 'Table', 'App\\Model\\Table', 'src'],
         'support' => ['Scoped', 'App\\Test\\Support\\Scoped', 'tests' . DIRECTORY_SEPARATOR . 'Support'],
@@ -359,6 +364,12 @@ final class ScopedTableAudit
         $traitFile = (new ReflectionClass(ScopedBulkOperationsTrait::class))->getFileName();
         foreach (self::GUARDED_METHODS as $method) {
             if ((new ReflectionMethod($class, $method))->getFileName() !== $traitFile) {
+                return false;
+            }
+        }
+
+        foreach (self::ORM_INTERNALS as $method) {
+            if ((new ReflectionMethod($class, $method))->getDeclaringClass()->getName() !== Table::class) {
                 return false;
             }
         }

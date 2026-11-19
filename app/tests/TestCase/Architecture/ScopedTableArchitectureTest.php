@@ -7,6 +7,7 @@ use App\Model\Table\RoleAssignmentsTable;
 use App\Test\Support\Architecture\Fixtures\AliasedScopedTable;
 use App\Test\Support\Architecture\Fixtures\GuardedTable;
 use App\Test\Support\Architecture\Fixtures\LooseLinkTable;
+use App\Test\Support\Architecture\Fixtures\OverridingInternalTable;
 use App\Test\Support\Architecture\Fixtures\OverridingTable;
 use App\Test\Support\Architecture\Fixtures\StrayTable;
 use App\Test\Support\Architecture\Fixtures\UnguardedTable;
@@ -195,6 +196,13 @@ class ScopedTableArchitectureTest extends TestCase
         $tables = ScopedTableAudit::load([OverridingTable::class], $this->getTableLocator());
 
         $this->assertSame([OverridingTable::class], ScopedTableAudit::missingBulkGuard($tables));
+    }
+
+    public function testATableThatOverridesAnInternalWriteMethodIsReported(): void
+    {
+        $tables = ScopedTableAudit::load([OverridingInternalTable::class], $this->getTableLocator());
+
+        $this->assertSame([OverridingInternalTable::class], ScopedTableAudit::missingBulkGuard($tables));
     }
 
     public function testLoadFailsWhenTheLocatorHoldsAnotherClassForTheAlias(): void

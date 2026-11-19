@@ -5,6 +5,7 @@ namespace App\Model\Table;
 
 use App\Authorization\DevelopmentScopeStack;
 use App\Model\Behavior\DevelopmentScopedBehavior;
+use App\Model\Exception\MissingDevelopmentScopeException;
 use Cake\Database\Expression\QueryExpression;
 use Cake\ORM\Query\DeleteQuery;
 use Cake\ORM\Query\InsertQuery;
@@ -24,7 +25,9 @@ use LogicException;
  * `updateQuery()` and `deleteQuery()`; only that direct internal call, made on this very table, is let through.
  * Those statements address one row by primary key, so the update and delete ones also get the development condition
  * of the running scope (skipped for an all-development scope, and for through-mode tables, which have no development
- * column): a primary key redirected after the guards ran still cannot reach another development.
+ * column): a primary key redirected after the guards ran still cannot reach another development. The update is built
+ * as `ScopedUpdateQuery`, which throws `DevelopmentScopeViolation` when it matches no row (Cake would report such a
+ * save as successful); `delete()` already returns false on zero rows.
  *
  * A dependent `hasMany`/`hasOne` whose `cascadeCallbacks` is false cascades with `deleteAll()` on the target, so it is
  * refused when the target is scoped. A scoped dependent association must set `cascadeCallbacks` to true, which deletes
@@ -78,7 +81,7 @@ trait ScopedBulkOperationsTrait
             throw $this->bulkRefused(__FUNCTION__);
         }
 
-        return $this->withScopeCondition(parent::updateQuery());
+        return $this->withScopeCondition(new ScopedUpdateQuery($this));
     }
 
     /**
@@ -111,8 +114,7 @@ trait ScopedBulkOperationsTrait
             return $query;
         }
 
-        $scope = DevelopmentScopeStack::current()
-            ?? throw new LogicException(sprintf('No development scope is running for %s.', $this->getAlias()));
+        $scope = DevelopmentScopeStack::current() ?? throw new MissingDevelopmentScopeException($this->getAlias());
         if ($scope->isAll()) {
             return $query;
         }
