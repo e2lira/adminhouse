@@ -27,6 +27,10 @@ use InvalidArgumentException;
  * create one policy per command (the read predicate would otherwise also apply to writes), and grant the runtime
  * role only the commands the policies allow. Per-role limits (a resident cannot edit a fee) stay in layer 1.
  *
+ * A table whose writes follow the permission catalogue (units, sections, ...) uses `managedDomainTable()`: reads as
+ * above, INSERT and UPDATE only in the developments where the session holds the permission code
+ * (`permission_dev_ids`), DELETE for the super-administrator only.
+ *
  * A catalogue whose `development_id` may be NULL (NULL = global) uses `catalogTable()` instead. A table that must
  * not be written directly (people, users) is written by hand: enable it with `enable()`, add policies with
  * `policy()`, grant with `grant()`, and expose writes through `definerFunction()`.
@@ -53,6 +57,11 @@ final class RowLevelSecurity
     public const ADMIN_DEV_IDS = '((SELECT public.admin_dev_ids())::bigint[])';
     public const SESSION_USER_ID = '(SELECT public.session_user_id())';
     public const PERSON_ID = '(SELECT public.person_id())';
+
+    /**
+     * Columns that no managed domain table lets the runtime role update: the key and the development of a row.
+     */
+    private const FIXED_COLUMNS = ['id', 'development_id'];
 
     /**
      * Statements that turn row-level security on for a table, even for its owner.
@@ -206,6 +215,62 @@ final class RowLevelSecurity
             self::policy($table, 'UPDATE', $scope, $scope),
             self::policy($table, 'DELETE', $scope),
             self::grant($table, 'SELECT, INSERT, UPDATE, DELETE'),
+            self::grantDefiner($table),
+        ];
+    }
+
+    /**
+     * Predicate for the developments where the session holds a permission (`permission_dev_ids`, AD7).
+     *
+     * @param string $code Permission code, `<module>.<action>` in lowercase letters and underscores.
+     * @return string
+     */
+    public static function permissionDevIds(string $code): string
+    {
+        if (preg_match('/^[a-z_]+\.[a-z_]+$/D', $code) !== 1) {
+            throw new InvalidArgumentException('Unsafe permission code ' . $code);
+        }
+
+        return "((SELECT public.permission_dev_ids('{$code}'))::bigint[])";
+    }
+
+    /**
+     * Policies and grants for a domain table whose writes follow a permission code (AD7).
+     *
+     * SELECT requires `is_super() OR development_id = ANY(dev_ids())`. INSERT and UPDATE require
+     * `is_super() OR development_id = ANY(permission_dev_ids(code))`, so a role that reads the table but lacks the
+     * code, a read-only assignment, a job and an archived development cannot write it. DELETE is for the
+     * super-administrator only (rows are deactivated or archived, not deleted). The runtime role may update only the
+     * listed columns, never `id` or `development_id`, so a row cannot move to another development.
+     *
+     * @param string $table Table name.
+     * @param string $code Permission code that guards writes, for example `units.manage`.
+     * @param list<string> $updatableColumns Columns the runtime role may update; never `id` or `development_id`.
+     * @return list<string>
+     */
+    public static function managedDomainTable(string $table, string $code, array $updatableColumns): array
+    {
+        if ($updatableColumns === []) {
+            throw new InvalidArgumentException('A managed domain table needs at least one updatable column');
+        }
+        foreach ($updatableColumns as $column) {
+            if (in_array($column, self::FIXED_COLUMNS, true)) {
+                throw new InvalidArgumentException('The column ' . $column . ' cannot be updatable');
+            }
+            self::identifier($column);
+        }
+
+        $read = self::IS_SUPER . ' OR development_id = ANY (' . self::DEV_IDS . ')';
+        $write = self::IS_SUPER . ' OR development_id = ANY (' . self::permissionDevIds($code) . ')';
+
+        return [
+            ...self::enable($table),
+            self::policy($table, 'SELECT', $read),
+            self::policy($table, 'INSERT', null, $write),
+            self::policy($table, 'UPDATE', $write, $write),
+            self::policy($table, 'DELETE', self::IS_SUPER),
+            self::grant($table, 'SELECT, INSERT, DELETE'),
+            self::grant($table, 'UPDATE (' . implode(', ', $updatableColumns) . ')'),
             self::grantDefiner($table),
         ];
     }
