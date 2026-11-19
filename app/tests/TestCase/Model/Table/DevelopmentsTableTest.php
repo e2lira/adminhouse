@@ -197,40 +197,51 @@ class DevelopmentsTableTest extends DatabaseTestCase
     }
 
     /**
-     * @return array<string, array{string}>
+     * @return array<string, array{string, mixed, bool}>
      */
-    public static function requiredFields(): array
+    public static function badRequiredValues(): array
     {
-        return [
-            'type' => ['type'],
-            'name' => ['name'],
-            'section_label' => ['section_label'],
-            'number_label' => ['number_label'],
-            'timezone' => ['timezone'],
-        ];
+        $cases = [];
+        foreach (['type', 'name', 'section_label', 'number_label', 'timezone'] as $field) {
+            $cases["{$field} missing"] = [$field, null, true];
+            $cases["{$field} null"] = [$field, null, false];
+            $cases["{$field} empty"] = [$field, '', false];
+            $cases["{$field} blank"] = [$field, '   ', false];
+            $cases["{$field} array"] = [$field, [], false];
+        }
+
+        return $cases;
     }
 
-    #[DataProvider('requiredFields')]
-    public function testEachRequiredFieldIsRequiredAndCannotBeBlank(string $field): void
-    {
+    #[DataProvider('badRequiredValues')]
+    public function testEachRequiredFieldRejectsMissingNullEmptyBlankAndArrayValues(
+        string $field,
+        mixed $value,
+        bool $omit,
+    ): void {
         $payload = self::validPayload();
-        unset($payload[$field]);
-        $missing = $this->developments->newEntity($payload);
-        $blank = $this->developments->newEntity([$field => '  '] + self::validPayload());
+        if ($omit) {
+            unset($payload[$field]);
+        } else {
+            $payload[$field] = $value;
+        }
 
-        $this->assertArrayHasKey($field, $missing->getErrors());
-        $this->assertArrayHasKey($field, $blank->getErrors());
-        $this->assertSame([$field], array_keys($missing->getErrors()));
+        $errors = $this->developments->newEntity($payload)->getErrors();
+
+        $this->assertSame([$field], array_keys($errors));
     }
 
     public function testTheTypeMustBeCondominiumOrSubdivision(): void
     {
         $this->assertSame([], $this->developments->newEntity(['type' => 'condominium'] + self::validPayload())->getErrors());
         $this->assertSame([], $this->developments->newEntity(['type' => 'subdivision'] + self::validPayload())->getErrors());
-        $this->assertArrayHasKey(
-            'type',
-            $this->developments->newEntity(['type' => 'tower'] + self::validPayload())->getErrors(),
-        );
+        foreach (['tower', '', 'Condominium', 'SUBDIVISION'] as $bad) {
+            $this->assertSame(
+                ['type'],
+                array_keys($this->developments->newEntity(['type' => $bad] + self::validPayload())->getErrors()),
+                $bad,
+            );
+        }
     }
 
     public function testTheTimezoneMustBeAKnownZone(): void
@@ -242,14 +253,127 @@ class DevelopmentsTableTest extends DatabaseTestCase
         );
     }
 
-    public function testTheArchiveStateAndTheIdCannotBeMassAssigned(): void
+    public function testPatchingAnExistingDevelopmentCannotChangeIdArchiveStateOrTimestamps(): void
     {
-        $development = $this->developments->newEntity(self::validPayload() + [
-            'id' => 99, 'archived_at' => '2026-01-01 00:00:00',
+        $id = $this->createDevelopment('Residencial Norte');
+        $this->actAsSuperAdministrator();
+        /** @var \App\Model\Entity\Development $existing */
+        $existing = $this->developments->get($id, developmentScope: DevelopmentScope::all());
+        $created = $existing->created;
+        $modified = $existing->modified;
+
+        $patched = $this->developments->patchEntity($existing, [
+            'name' => 'Renamed',
+            'id' => 999,
+            'archived_at' => '2026-01-01 00:00:00',
+            'created' => '2000-01-01 00:00:00',
+            'modified' => '2000-01-01 00:00:00',
+            'unknown' => 'x',
         ]);
 
-        $this->assertNull($development->get('archived_at'));
-        $this->assertNull($development->get('id'));
+        $this->assertSame('Renamed', $patched->name);
+        $this->assertSame($id, $patched->id);
+        $this->assertNull($patched->archived_at);
+        $this->assertEquals($created, $patched->created);
+        $this->assertEquals($modified, $patched->modified);
+        $this->assertNull($patched->get('unknown'));
+    }
+
+    public function testEveryEditableFieldIsAssignable(): void
+    {
+        $payload = self::validPayload() + [
+            'address' => 'a', 'phone' => 'b', 'rfc' => 'c', 'bank_name' => 'd', 'bank_account' => 'e',
+        ];
+
+        $development = $this->developments->newEntity($payload);
+
+        foreach ($payload as $field => $value) {
+            $this->assertSame($value, $development->get($field), $field);
+        }
+    }
+
+    public function testOptionalProfileFieldsThatAreEmptyOrBlankBecomeNull(): void
+    {
+        foreach (['', '   ', "\t\n"] as $empty) {
+            $development = $this->developments->newEntity(self::validPayload() + [
+                'address' => $empty, 'phone' => $empty, 'rfc' => $empty, 'bank_name' => $empty, 'bank_account' => $empty,
+            ]);
+            foreach (['address', 'phone', 'rfc', 'bank_name', 'bank_account'] as $field) {
+                $this->assertNull($development->get($field), $field);
+            }
+        }
+    }
+
+    public function testTextFieldsAreTrimmed(): void
+    {
+        $fields = ['name', 'section_label', 'number_label', 'address', 'phone', 'rfc', 'bank_name', 'bank_account'];
+        $development = $this->developments->newEntity([
+            'name' => '  Residencial Sur ', 'section_label' => ' Torre ', 'number_label' => ' Depto  ',
+            'address' => ' Calle 1 ', 'phone' => ' 555 ', 'rfc' => ' ABC ', 'bank_name' => ' B ', 'bank_account' => ' 12 ',
+            'type' => 'condominium', 'timezone' => 'America/Mexico_City',
+        ]);
+
+        $this->assertSame([], $development->getErrors());
+        $this->assertSame(
+            ['Residencial Sur', 'Torre', 'Depto', 'Calle 1', '555', 'ABC', 'B', '12'],
+            array_map(fn(string $f) => $development->get($f), $fields),
+        );
+    }
+
+    public function testNormalizedValuesSurviveASaveAndReload(): void
+    {
+        $this->actAsSuperAdministrator();
+        $payload = [
+            'name' => '  Persistida ', 'type' => 'subdivision', 'section_label' => ' Privada ',
+            'number_label' => 'Casa', 'timezone' => 'America/Mexico_City',
+            'address' => '   ', 'phone' => '', 'rfc' => ' ABC010101AB1 ', 'bank_name' => "\t", 'bank_account' => null,
+        ];
+
+        $saved = DevelopmentScopeStack::run(
+            DevelopmentScope::all(),
+            fn() => $this->developments->save($this->developments->newEntity($payload)),
+        );
+        $this->assertInstanceOf(Development::class, $saved);
+        $this->commitSession();
+        $row = $this->db()->execute(
+            'SELECT name, section_label, address, phone, rfc, bank_name, bank_account, archived_at
+             FROM developments WHERE id = ?',
+            [$saved->id],
+        )->fetch('assoc');
+
+        $this->assertSame([
+            'name' => 'Persistida', 'section_label' => 'Privada', 'address' => null, 'phone' => null,
+            'rfc' => 'ABC010101AB1', 'bank_name' => null, 'bank_account' => null, 'archived_at' => null,
+        ], $row);
+    }
+
+    /**
+     * @return array<string, array{string, int}>
+     */
+    public static function lengthLimits(): array
+    {
+        return [
+            'name' => ['name', 150], 'section_label' => ['section_label', 150], 'number_label' => ['number_label', 150],
+            'address' => ['address', 255], 'bank_name' => ['bank_name', 255],
+            'phone' => ['phone', 32], 'rfc' => ['rfc', 32], 'bank_account' => ['bank_account', 32],
+        ];
+    }
+
+    #[DataProvider('lengthLimits')]
+    public function testTextFieldsHaveALengthLimit(string $field, int $limit): void
+    {
+        $atLimit = $this->developments->newEntity([$field => str_repeat('a', $limit)] + self::validPayload());
+        $over = $this->developments->newEntity([$field => str_repeat('a', $limit + 1)] + self::validPayload());
+
+        $this->assertSame([], $atLimit->getErrors());
+        $this->assertSame([$field], array_keys($over->getErrors()));
+    }
+
+    public function testAnArrayInAnOptionalFieldIsRejected(): void
+    {
+        $errors = $this->developments->newEntity(['phone' => ['1']] + self::validPayload())->getErrors();
+
+        $this->assertSame(['phone'], array_keys($errors));
     }
 
     public function testASaveOfANewDevelopmentUnderASingleDevelopmentScopeIsRefused(): void

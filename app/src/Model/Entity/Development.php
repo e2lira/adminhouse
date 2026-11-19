@@ -24,13 +24,22 @@ use Cake\ORM\Entity;
 class Development extends Entity
 {
     /**
-     * The key is never assigned from a request, and neither is the archive state: archiving is its own action.
+     * Only the ten editable fields are assignable from a request. The key, the archive state (its own action) and the
+     * timestamps are not.
      *
      * @var array<string, bool>
      */
     protected array $_accessible = [
-        '*' => true,
-        'id' => false,
-        'archived_at' => false,
+        '*' => false,
+        'type' => true,
+        'name' => true,
+        'section_label' => true,
+        'number_label' => true,
+        'timezone' => true,
+        'address' => true,
+        'phone' => true,
+        'rfc' => true,
+        'bank_name' => true,
+        'bank_account' => true,
     ];
 }
