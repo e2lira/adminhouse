@@ -76,4 +76,22 @@ final class DevelopmentScope
     {
         return $this->all || in_array($developmentId, $this->ids, true);
     }
+
+    /**
+     * The scope that allows only what both scopes allow: an inner scope may narrow an outer one, never widen it.
+     *
+     * @param self $other Other scope.
+     * @return self
+     */
+    public function intersect(self $other): self
+    {
+        if ($this->all) {
+            return $other;
+        }
+        if ($other->all) {
+            return $this;
+        }
+
+        return self::only(array_values(array_intersect($this->ids, $other->ids)));
+    }
 }
