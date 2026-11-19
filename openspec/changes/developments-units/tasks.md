@@ -163,6 +163,10 @@ Rollback boundary: revert PR; schema from 2a stays.
 - Satisfies: DS "Permission seeds", "Resident data protection", AD6, AD7, AD13, W-E.
 - Est. lines: ~380 (fallback split: 3a-i-a function + parity test, 3a-i-b seed/revoke/matrix)
 
+Notes from review of PR 2b (carry into 3a-i):
+- `DevelopmentPolicy::canManageUnits/People/Occupancies` fail closed when `archived_at` was not loaded: call sites must pass the full development entity (never one read with a field list).
+- Add a real-database test that administrator and data_entry holders of `units.manage` are allowed on an unarchived development and refused on an archived one (the 2b policy tests use a stub for those roles because the permission is only seeded here).
+
 Tasks:
 - [ ] 6.1 RED: RLS tests for `permission_dev_ids(code)` per actor (super, adminA, dataEntryA, accountantA, resident, adminB, job): active assignment holding the code; `.view` codes include read-only assignments; non-`.view` codes need a writable assignment and a non-archived development; request context only (empty for jobs).
 - [ ] 6.2 GREEN: migration: `permission_dev_ids(p_code text) bigint[]` definer, STABLE, owner `kualitet_definer`, pinned `search_path`, EXECUTE only to `kualitet_app`; `down()` drops it.

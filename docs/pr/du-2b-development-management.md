@@ -12,11 +12,13 @@ PR 2b of `developments-units` (tasks 5.1 to 5.6, AD5 and W-E). The super-adminis
 |---|---|---|
 | Archived-write policy (W-E) | `feat(app): refuse writes to units, people and occupancies of an archived development` | `DevelopmentPolicy::canManageUnits`, `canManagePeople`, `canManageOccupancies` (permissions `units.manage`, `people.manage`, `occupancies.manage`) return false when the development is archived, for the super-administrator too (they unarchive first); an entity loaded without `archived_at` is refused (fail closed). Tests: archived refuses a permission holder and the super-administrator, unarchived allows a holder, a user without the permission is refused, each ability asks for its own code, a real super-administrator is allowed until the development is archived. |
 | Management screens | `feat(app): let the super-administrator add, edit, archive and restore developments` | `DevelopmentsController` `add`, `edit`, `archive`, `unarchive`; explicit routes (`/developments/add`, `/developments/{id}/edit`, `/archive`, `/unarchive`, ids `[0-9]+`, archive and unarchive POST only, no delete route); Spanish form (`form.php`) and list; time zone defaults to `America/Mexico_City` on the add form; `DevelopmentsTablePolicy::canAdd`; list marks archived developments and selects `id, name, type, archived_at` explicitly. |
+| Review round 1 | `fix(app): keep the archived-write policy fail-closed for hidden fields and name its permission codes`, `fix(app): lock the row on archive and restore, warn on no-ops and cover edit, id and input edge cases`, `test(app): assert the exact status of each development route for the super-administrator and an administrator` | Archive and restore read the row `FOR UPDATE` in the request transaction, so a concurrent change becomes a no-op with a warning flash; W-E policy decides from original values (hidden fields count, unloaded fails closed) and names its permission codes; exact-status route walk for the super-administrator and an administrator; tests for edit edge cases, ids, inactive and disabled super-administrators, non-scalar input and `canAdd`. |
 | Default deny | `test(app): walk the development routes in the default-deny test` | Walks every routed `Developments` action as the super-administrator and fails if one answers 500 (an action that never authorizes), and checks that the add, edit, archive and unarchive routes are walked. |
 | Docs | `docs: record developments-units PR 2b` | This description, change-log (W-E decision), tasks, progress, test-results, openspec tasks. |
 
 ## How to review
 
+0. Review by commit: the W-E policy is its own first commit, `bc05a94`, and can be read alone; the second commit is the screens, then the route walk, then review-round fixes.
 1. `app/src/Controller/DevelopmentsController.php` and `app/config/routes.php`.
 2. `app/src/Policy/DevelopmentPolicy.php` (W-E methods) and `DevelopmentsTablePolicy::canAdd`.
 3. `app/templates/Developments/form.php` and `index.php`.
@@ -24,10 +26,10 @@ PR 2b of `developments-units` (tasks 5.1 to 5.6, AD5 and W-E). The super-adminis
 
 ## Verification
 
-- `vendor/bin/phpunit` (run alone, real PostgreSQL): `OK (686 tests, 2305 assertions)`; baseline was 624 tests, 2020 assertions. The new tests were seen failing first.
+- `vendor/bin/phpunit` (run alone, real PostgreSQL): `OK (736 tests, 2510 assertions)` after review round 1 (686 and 2305 before it); baseline was 624 tests, 2020 assertions. The new tests were seen failing first.
 - `vendor/bin/phpcs`: clean (exit 0)
 - Migrations: none in this PR.
-- Security review: self-review plus mutation checks, each seen red and then restored: no entity authorization in `managedDevelopment` (default-deny walk fails); a `false` save treated as success (5 tests fail); a `DevelopmentScopeViolation` treated as success (2 fail); `canAdd` always true (4 fail); index without explicit fields (1 fails); development looked up under `developments.view` instead of `developments.manage` (8 fail); W-E archived check removed (9 fail). A fresh-context review is still due.
+- Security review: self-review plus mutation checks, each seen red and then restored: no entity authorization in `managedDevelopment` (default-deny walk fails); a `false` save treated as success (5 tests fail); a `DevelopmentScopeViolation` treated as success (2 fail); `canAdd` always true (4 fail); index without explicit fields (1 fails); development looked up under `developments.view` instead of `developments.manage` (8 fail); W-E archived check removed (9 fail). Review round 1 added: lock removed (1 fails), no-op flash back to success (2), W-E check on `toArray()` (6), in-memory change ignored (3), `canAdd` always true (7). One mutation survived by design: the component lookup under `developments.view` alone (the entity read after it is still scoped by `developments.manage`, same 404). A second fresh-context review is still due.
 - Manual checks: none in a browser.
 - Not verified: no manual check in a browser (layout and flash messages only seen through integration tests); the archived-write refusal at database level (row-level security for units, people and occupancies arrives in PR 3a-i and is coarse by design, so today the refusal is policy only); GitHub Actions (not pushed).
 
@@ -45,7 +47,8 @@ None.
 - Edit, archive and restore answer 404 to every non-super user (same body as a missing id, AC-MD-1); add answers 403 because it has no id.
 - Archived developments can still be edited by the super-administrator; only the unit, people and occupancy writes are blocked (W-E, policy methods added now, called by the PRs that add those writes).
 - Save results are asserted: a `false` save or a refused scoped write shows an error and never a success message. The failure paths are driven in tests by a `Model.beforeSave` listener, since the real save cannot fail for an all-development scope.
-- Size: 1101 changed lines in `app` (324 in `app/src`, `app/config` and `app/templates`, the rest tests) against a ~380 estimate; `size:exception`, as in PR 2a. The planned split (2b-i add and edit, 2b-ii archive and policy) was not applied because the controller, routes and tests share one form and one save path.
+- Concurrency: archive and restore lock the row (`FOR UPDATE`) so two simultaneous requests serialize; tests prove the lock is requested, not two real concurrent requests.
+- Size: 1553 changed lines in `app` (354 in `app/src`, `app/config` and `app/templates`, the rest tests) against a ~380 estimate; `size:exception`, as in PR 2a. The planned split (2b-i add and edit, 2b-ii archive and policy) was not applied because the controller, routes and tests share one form and one save path.
 
 ## Checklist
 
