@@ -234,3 +234,5 @@
 | DU-3B-I | developments-units PR 3b-i: Sections and Units tables, entities, validation, rules under the save scope, unit and section policies (tasks 8.1 to 8.5). | DONE (pending review) | build | Claude | 2026-11-19 |
 
 | DU-3B-I-R1 | developments-units PR 3b-i review round 1: archived-development guard in the model layer, stored-development policies, malformed id handling, explicit delete refusal, real-database bound tests, mutation checks, 3b-ii binding notes. | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-3B-II | developments-units PR 3b-ii: units and sections UI (`UnitsController`, templates with the development labels, explicit routes, default-deny walk), field errors in Spanish, constraint-violation attribution under row-level security (tasks 9.1 to 9.5). | DONE (pending review) | build | Claude | 2026-11-19 |
