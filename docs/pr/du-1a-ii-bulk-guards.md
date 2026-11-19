@@ -12,6 +12,7 @@ PR 1a-ii of `developments-units` (tasks 2.1 to 2.7). A bulk statement has no ent
 |---|---|---|
 | Bulk operations | `feat(app): refuse bulk statements on scoped tables` | `ScopedBulkOperationsTrait` throws `LogicException` (naming the table) from the four bulk methods. The ORM builds the statement of a single-row `save()` and `delete()` through `updateQuery()`/`deleteQuery()`, so those two let through only a direct call from `Cake\ORM\Table::_update` / `_processDelete`. A dependent `hasMany` with `cascadeCallbacks` false cascades with `deleteAll()` and is refused (tested); scoped dependents must set `cascadeCallbacks` true, which deletes row by row under the operation scope (tested). |
 | Architecture tests | `test(app): guard bulk trait, association entries and raw SQL on scoped tables` | `ScopedTableAudit` (test support) plus `ScopedTableArchitectureTest`, with fixture tables and source snippets proving each check fails on a violation. |
+| Review round 1 | `fix(app): keep single-row scoped statements inside the scope and guard insertQuery`, `test(app): harden the scope audits (behavior alias, overridden guards, raw SQL gaps, discovery)` | The statements the ORM builds for a single-row `save()`/`delete()` carry `<development column> IN (scope ids)` (skipped for an all-development scope and for through-mode tables, which have no column); `DevelopmentScopedBehavior` rejects an existing entity whose primary key is dirty (save and delete); `insertQuery()` is refused like the other entry points; the ORM-caller check also requires the call to come from this very table (`DEBUG_BACKTRACE_PROVIDE_OBJECT`); a test pins that `Cake\ORM\Table` still declares `_update`, `_processDelete` and `_insert`. Audits: the behavior is detected by class under any alias; `updateAll`, `deleteAll`, `insertQuery`, `updateQuery`, `deleteQuery` must resolve to the trait's own code (an override fails); the raw-SQL scan also covers `->into/table/update/delete/insert('<name>'` and connection helpers, and scans `src`, `config` and `plugins` (not `config/Migrations`, not `src/Database`); `load()` fails when the locator holds another class for the alias; every `*Table.php` under `src/Model/Table` (subdirectories included) must resolve to a class. |
 | Docs | `docs: record developments-units PR 1a-ii` | This description, change-log, tasks, progress, test-results, openspec tasks. |
 
 ## How to review
@@ -23,7 +24,7 @@ PR 1a-ii of `developments-units` (tasks 2.1 to 2.7). A bulk statement has no ent
 
 ## Verification
 
-- `vendor/bin/phpunit` (run alone, real PostgreSQL): `OK (492 tests, 1747 assertions)`; new tests were seen failing first.
+- `vendor/bin/phpunit` (run alone, real PostgreSQL): `OK (505 tests, 1783 assertions)` after review round 1; new tests (initial and review) were seen failing first.
 - `vendor/bin/phpcs`: clean (exit 0)
 - Migrations: none
 - Manual checks: the raw-SQL scanner run against the real `src` with `developments` reported the one existing query (`RoleAssignmentManager`), so the pass with real scoped names is not a broken scanner.
@@ -39,8 +40,10 @@ None.
 
 ## Known limits and follow-ups
 
-- Size: 836 changed lines in `app` (105 in `app/src`, the rest tests and test support) plus docs. Over the 400-line budget (estimate was ~200): needs `size:exception`; about 87 percent is tests and fixtures that prove each guard fails.
-- Residual risk: string-built SQL that assembles a scoped table name from pieces escapes the scan; it is covered only by row-level security.
+- Size: 1,279 changed lines in `app` (about 210 in `app/src`, the rest tests and test support) plus docs. Over the 400-line budget (estimate was ~200): needs `size:exception`; about 83 percent is tests and fixtures that prove each guard fails.
+- Residual risk: string-built SQL that assembles a scoped table name from pieces or interpolates it (`FROM {$table}`) escapes the scan; it is covered only by row-level security.
+- Known limit of the audits: associations added to a table at runtime, after `initialize()`, are not seen.
+- Review round 1 also changed `DevelopmentScopedBehavior` (primary-key guard, `guardedColumn()`), since 1a-i is already merged into the stacked branches.
 - `updateQuery()`/`deleteQuery()` are guarded by inspecting the direct caller; if a future CakePHP version changes how `save()`/`delete()` build their statements, single-row writes fail loudly (never silently open), and the guard must be updated.
 - The scan is dynamic: it uses the table names of scoped Table classes found in `src/Model/Table`, so it passes vacuously today. When PR 1b scopes `DevelopmentsTable`, it will flag `SELECT 1 FROM developments` in `src/Authorization/RoleAssignmentManager.php`; PR 1b must replace that query or add a reasoned exception.
 - `UsersTable hasMany RoleAssignments` needs no whitelist entry because `RoleAssignmentsTable` is not scoped (AD3); a test pins that, so scoping it later makes the association fail as unlisted.

@@ -79,7 +79,7 @@ Verification: phpunit (alone), phpcs. No migration.
 PR description: template; "No database change"; note residual risk of string-built SQL covered only by RLS.
 Rollback boundary: revert; trait unused by production tables until 1b.
 
-Implementation note (1a-ii): the trait is named `ScopedBulkOperationsTrait` (coding standard requires the suffix); branch `feat/du-1a-ii-bulk-guards`; task 2.4 reconciled with revised AD2 (static guard: an association entering a scoped table needs a scoped source with a development-column key, or a reasoned whitelist entry; `UsersTable hasMany RoleAssignments` needs none because RoleAssignments is unscoped); `updateQuery()`/`deleteQuery()` let through only the ORM's own single-row `_update`/`_processDelete`.
+Implementation note (1a-ii): the trait is named `ScopedBulkOperationsTrait` (coding standard requires the suffix); branch `feat/du-1a-ii-bulk-guards`; task 2.4 reconciled with revised AD2 (static guard: an association entering a scoped table needs a scoped source with a development-column key, or a reasoned whitelist entry; `UsersTable hasMany RoleAssignments` needs none because RoleAssignments is unscoped); `updateQuery()`/`deleteQuery()` let through only the ORM's own single-row `_update`/`_processDelete`. Review round 1: those statements carry the scope's development condition, `insertQuery()` is guarded too, the behavior refuses a changed primary key, and the audits were hardened (alias, overrides, raw-SQL gaps, discovery).
 
 ---
 
