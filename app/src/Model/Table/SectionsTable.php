@@ -17,6 +17,7 @@ use Cake\Validation\Validator;
 class SectionsTable extends Table
 {
     use ScopedBulkOperationsTrait;
+    use RefusesArchivedDevelopmentTrait;
     use ScopedOperationTrait;
 
     /**

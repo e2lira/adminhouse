@@ -23,6 +23,7 @@ use Cake\Validation\Validator;
 class UnitsTable extends Table
 {
     use ScopedBulkOperationsTrait;
+    use RefusesArchivedDevelopmentTrait;
     use ScopedOperationTrait;
 
     /**
