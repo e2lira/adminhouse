@@ -113,30 +113,60 @@ class DefaultDenyTest extends DatabaseTestCase
         }
     }
 
-    public function testEveryRoutedDevelopmentActionAuthorizesBeforeItAnswers(): void
+    /**
+     * Walk every routed Developments action with a fresh development per request (no state carried between
+     * actions) and check the exact status. An action that never authorizes answers 500 and fails here.
+     *
+     * @param array<string, int> $expected Status per `action METHOD`.
+     * @param callable(int): void $prepare Called with each fresh development id before its request.
+     * @return void
+     */
+    private function walkDevelopmentRoutes(array $expected, callable $prepare): void
     {
-        $dev = $this->createDevelopment('Residencial Norte');
+        $debug = Configure::read('debug');
+        Configure::write('debug', false);
+        $walked = [];
+        try {
+            foreach (Router::routes() as $route) {
+                if (($route->defaults['controller'] ?? null) !== 'Developments') {
+                    continue;
+                }
+                foreach ((array)($route->defaults['_method'] ?? ['GET']) as $method) {
+                    $key = $route->defaults['action'] . ' ' . $method;
+                    $dev = $this->createDevelopment('Walk ' . count($walked));
+                    $prepare($dev);
+                    $url = str_replace('{id}', (string)$dev, $route->template);
+                    $method === 'POST' ? $this->post($url, []) : $this->get($url);
+                    $walked[$key] = $this->_response->getStatusCode();
+                }
+            }
+        } finally {
+            Configure::write('debug', $debug);
+        }
+
+        ksort($walked);
+        ksort($expected);
+        $this->assertSame($expected, $walked);
+    }
+
+    public function testEveryRoutedDevelopmentActionAnswersTheSuperAdministratorWithItsExactStatus(): void
+    {
         $root = $this->signInAs('root');
         $this->assignRole($root, 'super_administrator', null);
-        Configure::write('debug', false);
 
-        $walked = [];
-        foreach (Router::routes() as $route) {
-            if (($route->defaults['controller'] ?? null) !== 'Developments') {
-                continue;
-            }
-            $methods = (array)($route->defaults['_method'] ?? ['GET']);
-            $url = str_replace('{id}', (string)$dev, $route->template);
-            foreach ($methods as $method) {
-                $method === 'POST' ? $this->post($url, []) : $this->get($url);
-                // An action that skipped authorization is refused by the middleware with a 500.
-                $this->assertLessThan(500, $this->_response->getStatusCode(), $method . ' ' . $url);
-                $walked[$route->defaults['action'] . ' ' . $method] = true;
-            }
-        }
+        $this->walkDevelopmentRoutes([
+            'index GET' => 200, 'add GET' => 200, 'add POST' => 200, 'edit GET' => 200, 'edit POST' => 302,
+            'archive POST' => 302, 'unarchive POST' => 302,
+        ], fn(int $dev) => null);
+    }
 
-        foreach (['index GET', 'add GET', 'add POST', 'edit GET', 'edit POST', 'archive POST', 'unarchive POST'] as $expected) {
-            $this->assertArrayHasKey($expected, $walked, $expected . ' must be routed and walked');
-        }
+    public function testEveryRoutedDevelopmentActionRefusesAnAdministratorOfThatDevelopment(): void
+    {
+        $user = $this->signInAs('ann');
+
+        $this->walkDevelopmentRoutes([
+            'index GET' => 200, 'add GET' => 403, 'add POST' => 403, 'edit GET' => 404, 'edit POST' => 404,
+            'archive POST' => 404, 'unarchive POST' => 404,
+        ], fn(int $dev) => $this->assignRole($user, 'administrator', $dev));
     }
 }
