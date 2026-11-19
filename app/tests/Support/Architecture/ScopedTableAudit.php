@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Test\Support\Architecture;
 
+use App\Model\Behavior\DevelopmentScopedBehavior;
 use App\Model\Table\ScopedBulkOperationsTrait;
 use Cake\ORM\Association;
 use Cake\ORM\Locator\LocatorInterface;
@@ -11,6 +12,8 @@ use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use ReflectionClass;
+use ReflectionMethod;
+use RuntimeException;
 
 /**
  * Static checks behind the architecture tests of the development scope (AD2, AD4c). Every check takes the tables or
@@ -21,7 +24,10 @@ use ReflectionClass;
  */
 final class ScopedTableAudit
 {
-    public const BEHAVIOR = 'DevelopmentScoped';
+    /**
+     * Methods the bulk-operations trait must own, so that no class can override one and reopen a bypass.
+     */
+    private const GUARDED_METHODS = ['updateAll', 'deleteAll', 'insertQuery', 'updateQuery', 'deleteQuery'];
 
     private const TABLE_DIRECTORIES = [
         'production' => ['Model' . DIRECTORY_SEPARATOR . 'Table', 'App\\Model\\Table', 'src'],
@@ -50,12 +56,9 @@ final class ScopedTableAudit
             }
             [$directory, $namespace, $base] = self::TABLE_DIRECTORIES[$group];
             $path = self::root() . DIRECTORY_SEPARATOR . $base . DIRECTORY_SEPARATOR . $directory;
-            foreach (glob($path . DIRECTORY_SEPARATOR . '*Table.php') ?: [] as $file) {
-                $class = $namespace . '\\' . basename($file, '.php');
-                if (
-                    class_exists($class) && is_subclass_of($class, Table::class)
-                    && !(new ReflectionClass($class))->isAbstract()
-                ) {
+            foreach (self::tableFiles($path) as $relative) {
+                $class = self::classOf($namespace, $relative);
+                if (self::isConcreteTable($class)) {
                     $classes[] = $class;
                 }
             }
@@ -66,6 +69,62 @@ final class ScopedTableAudit
     }
 
     /**
+     * @param string $directory Directory to search, recursively.
+     * @param string $namespace Namespace that matches the directory.
+     * @return list<string> Paths (relative to the directory) of `*Table.php` files whose class does not exist or is
+     *  not a Table: such a file would be silently missing from every audit.
+     */
+    public static function unresolvedTableFiles(string $directory, string $namespace): array
+    {
+        $unresolved = [];
+        foreach (self::tableFiles($directory) as $relative) {
+            $class = self::classOf($namespace, $relative);
+            if (!class_exists($class) || !is_subclass_of($class, Table::class)) {
+                $unresolved[] = $relative;
+            }
+        }
+
+        return $unresolved;
+    }
+
+    /**
+     * @param string $directory Directory to search, recursively.
+     * @return list<string> Paths of the `*Table.php` files, relative to the directory.
+     */
+    private static function tableFiles(string $directory): array
+    {
+        if (!is_dir($directory)) {
+            return [];
+        }
+        $files = [];
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($iterator as $file) {
+            if (str_ends_with($file->getFilename(), 'Table.php')) {
+                $files[] = substr($file->getPathname(), strlen(rtrim($directory, '/\\')) + 1);
+            }
+        }
+        sort($files);
+
+        return $files;
+    }
+
+    private static function classOf(string $namespace, string $relative): string
+    {
+        return $namespace . '\\' . str_replace([DIRECTORY_SEPARATOR, '.php'], ['\\', ''], $relative);
+    }
+
+    private static function isConcreteTable(string $class): bool
+    {
+        return class_exists($class) && is_subclass_of($class, Table::class)
+            && !(new ReflectionClass($class))->isAbstract();
+    }
+
+    /**
+     * Known limit: only associations declared by the time `initialize()` ends are audited; one added to a table at
+     * runtime (after construction) is not seen.
+     *
      * @param list<class-string<\Cake\ORM\Table>> $classes Table classes.
      * @param \Cake\ORM\Locator\LocatorInterface $locator Locator that builds them (and their association targets).
      * @return list<\Cake\ORM\Table>
@@ -75,9 +134,18 @@ final class ScopedTableAudit
         $tables = [];
         foreach ($classes as $class) {
             $alias = preg_replace('/Table$/', '', self::shortName($class));
-            $tables[] = $locator->exists($alias)
+            $table = $locator->exists($alias)
                 ? $locator->get($alias)
                 : $locator->get($alias, ['className' => $class]);
+            if ($table::class !== $class) {
+                throw new RuntimeException(sprintf(
+                    'The locator holds %s under the alias %s, not the audited %s.',
+                    $table::class,
+                    $alias,
+                    $class,
+                ));
+            }
+            $tables[] = $table;
         }
 
         return $tables;
@@ -89,7 +157,7 @@ final class ScopedTableAudit
      */
     public static function isScoped(Table $table): bool
     {
-        return $table->hasBehavior(self::BEHAVIOR);
+        return self::behaviorOf($table) !== null;
     }
 
     /**
@@ -100,7 +168,7 @@ final class ScopedTableAudit
     {
         $missing = [];
         foreach ($tables as $table) {
-            if (self::isScoped($table) && !in_array(ScopedBulkOperationsTrait::class, self::allTraits($table::class), true)) {
+            if (self::isScoped($table) && !self::usesBulkGuardUnchanged($table::class)) {
                 $missing[] = $table::class;
             }
         }
@@ -174,27 +242,53 @@ final class ScopedTableAudit
     }
 
     /**
-     * Scans `src` (except `src/Database`, which owns RLS and provisioning SQL; migrations live outside `src`) for
-     * raw SQL or manual joins that name a scoped table. Residual risk: SQL assembled from pieces escapes the scan and
-     * is bounded only by row-level security.
+     * @return list<string> Directories (relative to the application root) scanned for raw SQL.
+     */
+    public static function rawSqlRoots(): array
+    {
+        return ['src', 'config', 'plugins'];
+    }
+
+    /**
+     * @param string $relativePath Path relative to the application root.
+     * @return bool Whether the file may name any table: migrations, and `App\Database` (RLS and provisioning SQL).
+     */
+    public static function isExcludedFromRawSqlScan(string $relativePath): bool
+    {
+        $path = str_replace('\\', '/', $relativePath);
+
+        return str_starts_with($path, 'config/Migrations/') || str_starts_with($path, 'src/Database/');
+    }
+
+    /**
+     * Scans `src`, `config` and `plugins` (except migrations and `src/Database`) for raw SQL, write-builder calls or
+     * manual joins that name a scoped table. Residual risk: a name that is interpolated or assembled from pieces
+     * (`FROM {$table}`, `'un' . 'its'`) escapes the scan and is bounded only by row-level security.
      *
      * @param list<string> $names Scoped table names.
      * @return list<string> `path: snippet` for each hit.
      */
     public static function rawSqlOffenders(array $names): array
     {
-        $src = self::root() . DIRECTORY_SEPARATOR . 'src';
-        $database = $src . DIRECTORY_SEPARATOR . 'Database' . DIRECTORY_SEPARATOR;
+        $root = self::root();
         $offenders = [];
 
-        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($src, FilesystemIterator::SKIP_DOTS));
-        foreach ($files as $file) {
-            $path = $file->getPathname();
-            if ($file->getExtension() !== 'php' || str_starts_with($path, $database)) {
+        foreach (self::rawSqlRoots() as $directory) {
+            if (!is_dir($root . DIRECTORY_SEPARATOR . $directory)) {
                 continue;
             }
-            foreach (self::rawSqlHits((string)file_get_contents($path), $names) as $hit) {
-                $offenders[] = substr($path, strlen($src) + 1) . ': ' . $hit;
+            $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(
+                $root . DIRECTORY_SEPARATOR . $directory,
+                FilesystemIterator::SKIP_DOTS,
+            ));
+            foreach ($files as $file) {
+                $relative = substr($file->getPathname(), strlen($root) + 1);
+                if ($file->getExtension() !== 'php' || self::isExcludedFromRawSqlScan($relative)) {
+                    continue;
+                }
+                foreach (self::rawSqlHits((string)file_get_contents($file->getPathname()), $names) as $hit) {
+                    $offenders[] = $relative . ': ' . $hit;
+                }
             }
         }
 
@@ -227,6 +321,7 @@ final class ScopedTableAudit
             '/\b(?:FROM|JOIN|UPDATE|INTO)\s+(?:ONLY\s+)?["`]?(?:\w+\.)?' . $name . '(?!\w)/i',
             '/->\s*(?:(?:inner|left|right)J|j)oin\s*\([^;]{0,300}?[\'"](?:\w+\.)?' . $name . '[\'"]/s',
             '/->\s*from\s*\([^;]{0,200}?[\'"](?:\w+\.)?' . $name . '[\'"]/s',
+            '/(?:->|::)\s*(?:into|table|update|delete|insert)\s*\(\s*[\'"](?:\w+\.)?' . $name . '[\'"]/',
         ];
         $hits = [];
         foreach ($patterns as $pattern) {
@@ -238,6 +333,37 @@ final class ScopedTableAudit
         }
 
         return $hits;
+    }
+
+    private static function behaviorOf(Table $table): ?DevelopmentScopedBehavior
+    {
+        foreach ($table->behaviors()->loaded() as $name) {
+            $behavior = $table->behaviors()->get($name);
+            if ($behavior instanceof DevelopmentScopedBehavior) {
+                return $behavior;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param class-string $class Table class.
+     * @return bool Whether the class uses the trait and every guarded method resolves to the trait's own code.
+     */
+    private static function usesBulkGuardUnchanged(string $class): bool
+    {
+        if (!in_array(ScopedBulkOperationsTrait::class, self::allTraits($class), true)) {
+            return false;
+        }
+        $traitFile = (new ReflectionClass(ScopedBulkOperationsTrait::class))->getFileName();
+        foreach (self::GUARDED_METHODS as $method) {
+            if ((new ReflectionMethod($class, $method))->getFileName() !== $traitFile) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static function label(Table $source, Association $association): string
@@ -256,7 +382,7 @@ final class ScopedTableAudit
      */
     private static function developmentField(Table $table): ?string
     {
-        $config = $table->behaviors()->get(self::BEHAVIOR)->getConfig();
+        $config = (self::behaviorOf($table) ?? throw new RuntimeException('Table is not scoped.'))->getConfig();
 
         return $config['through'] !== null ? null : (string)$config['field'];
     }
