@@ -23,7 +23,7 @@ use Cake\ORM\Entity;
 class Unit extends Entity
 {
     /**
-     * Only the editable fields are assignable from a request. The key, the development (set from the save scope) and
+     * Only the editable fields are assignable from a request. The key, the development (set from the save scope), the active flag (changed only by the activate and deactivate actions) and
      * the timestamps are not.
      *
      * @var array<string, bool>
@@ -35,6 +35,5 @@ class Unit extends Entity
         'type' => true,
         'lot_area_m2' => true,
         'indiviso_pct' => true,
-        'is_active' => true,
     ];
 }

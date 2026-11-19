@@ -12,7 +12,8 @@ use Throwable;
  *
  * Only the SQLSTATE, the column NAMES and the constraint name are read. The values in the server message are row data
  * and are dropped, and the message is not parsed beyond the `Key (columns)=(` shape, which PostgreSQL emits in every
- * language, and the last quoted identifier of its first line (the constraint). A session under row-level security
+ * language, and the identifier that follows the word for the constraint in its first line (`constraint "x"`, or the
+ * Spanish `restricción de unicidad «x»` / `llave foránea «x»`; any other wording gives no name). A session under row-level security
  * never receives the DETAIL line (PostgreSQL leaves it out so key values do not leak), so then the columns come from
  * the constraint name, looked up in the catalog by the caller (`withColumns()`).
  */
@@ -51,18 +52,33 @@ final class ConstraintViolation
             if ($rule !== null) {
                 $message = (string)($e->errorInfo[2] ?? '');
                 preg_match('/\(([^()]*)\)=\(/', $message, $match);
-                // The first line is the primary message; the DETAIL line may quote a table, not the constraint.
-                preg_match_all('/[«"]([^«»"]+)[»"]/u', strtok($message, "\n") ?: '', $quoted);
+                // Only the first line (the primary message) is read; the DETAIL line is not.
+                $constraint = self::constraintName(strtok($message, "\n") ?: '');
 
                 return new self(
                     $rule,
                     array_map('trim', explode(',', $match[1] ?? '')),
-                    $quoted[1] === [] ? null : $quoted[1][array_key_last($quoted[1])],
+                    $constraint,
                 );
             }
         }
 
         return null;
+    }
+
+    /**
+     * @param string $line First line of the server message.
+     * @return string|null The name that follows the word for the constraint, or null when no known wording matches.
+     */
+    private static function constraintName(string $line): ?string
+    {
+        $found = preg_match(
+            '/(?:constraint\s+"|(?:unicidad|for[áa]nea)\s+«)([^"«»]+)["»]/u',
+            $line,
+            $match,
+        );
+
+        return $found === 1 ? $match[1] : null;
     }
 
     /**

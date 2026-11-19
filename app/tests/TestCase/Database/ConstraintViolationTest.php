@@ -109,6 +109,29 @@ class ConstraintViolationTest extends TestCase
         $this->assertSame('units_section_fkey', $foreign?->constraint);
     }
 
+    public function testTheReferencedSideOfAForeignKeyNamesTheConstraintNotTheTable(): void
+    {
+        $english = ConstraintViolation::from($this->driverError(
+            '23503',
+            'ERROR: update or delete on table "sections" violates foreign key constraint "units_section_fkey" on table "units"',
+        ));
+        $spanish = ConstraintViolation::from($this->driverError(
+            '23503',
+            'ERROR: update o delete en la tabla «sections» viola la llave foránea «units_section_fkey» en la tabla «units»',
+        ));
+
+        $this->assertSame('units_section_fkey', $english?->constraint);
+        $this->assertSame('units_section_fkey', $spanish?->constraint);
+    }
+
+    public function testAQuotedNameThatIsNotAConstraintIsNotTaken(): void
+    {
+        $this->assertNull(ConstraintViolation::from($this->driverError(
+            '23505',
+            'ERROR: something about "units" happened',
+        ))?->constraint);
+    }
+
     public function testAMessageWithoutAQuotedNameHasNoConstraint(): void
     {
         $this->assertNull(ConstraintViolation::from($this->driverError('23505', 'Key (name)=(x) already exists.'))?->constraint);

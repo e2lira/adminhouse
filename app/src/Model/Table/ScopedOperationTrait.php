@@ -68,7 +68,10 @@ trait ScopedOperationTrait
      * The violation behind an error, with its columns. A session under row-level security gets no DETAIL line, so the
      * columns are read from the catalog by the constraint name, for a constraint of THIS table only (a violation
      * raised by another table finds no columns and stays unattributed). Safe because the caller only converts when the
-     * failed statement was rolled back on its own.
+     * failed statement was rolled back on its own: inside a caller-held transaction without savepoints `$convert` is
+     * false, this method is never reached and the exception is rethrown (a lookup there would run in an aborted
+     * transaction; pinned by `testACallerTransactionWithoutSavepointsGetsTheViolationRethrown`). If the lookup fails
+     * anyway the violation stays unattributed and the caller rethrows.
      *
      * @param \Throwable $error Error thrown by the save.
      * @return \App\Database\ConstraintViolation|null
