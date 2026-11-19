@@ -216,3 +216,7 @@
 | DU-2A | developments-units PR 2a (`feat/du-2a-development-fields`): development profile fields, archive state, `developments.manage`, validation and policy methods (openspec tasks 4.1 to 4.8). | DONE (pending review) | build | Claude | 2026-11-18 |
 
 | DU-2A-R1 | developments-units PR 2a review round 1 fixes (normalization, allow-list, length limits, assignment-date and RLS column tests, PR notes for 2b). | DONE (pending review) | build | Claude | 2026-11-18 |
+
+| DU-2B | developments-units PR 2b (`feat/du-2b-development-management`): development management UI, archive and unarchive, W-E policy methods, default-deny walk (openspec tasks 5.1 to 5.6). | DONE (pending review) | build | Claude | 2026-11-18 |
+
+| DU-2B-R1 | developments-units PR 2b review round 1 fixes (conditional archive transition, route-walk statuses, edit and id edge cases, W-E contract, note for 3a-i). | DONE (pending review) | build | Claude | 2026-11-19 |
