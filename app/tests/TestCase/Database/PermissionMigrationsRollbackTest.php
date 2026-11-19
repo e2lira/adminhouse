@@ -5,13 +5,19 @@ namespace App\Test\TestCase\Database;
 
 use App\Test\Support\DatabaseTestCase;
 use Migrations\Migrations;
+use PHPUnit\Framework\Attributes\Group;
+use RuntimeException;
+use Throwable;
 
 /**
  * AD6, AD13: the `permission_dev_ids`, `units.manage` and resident-revoke migrations undo exactly what they did.
  *
  * Rolls the three back on the test database and forwards again, comparing the role/permission rows. The forward run
- * sits in `finally`, so a failing assertion cannot leave later tests on a half-migrated schema. Not parallel-safe.
+ * runs even when an assertion fails, so a failure cannot leave later tests on a half-migrated schema, and a failure
+ * of that restore never hides the original one. It changes the shared test schema: not parallel-safe, so it has its own
+ * group (`migration-rollback`, run alone with `--group migration-rollback`). It stays in the default run.
  */
+#[Group('migration-rollback')]
 class PermissionMigrationsRollbackTest extends DatabaseTestCase
 {
     private const BEFORE_THE_THREE = 20261120000001;
@@ -68,6 +74,7 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         $expectedAfterDown[] = 'resident:units.view';
         sort($expectedAfterDown);
 
+        $failure = null;
         try {
             $this->assertTrue($migrations->rollback(['target' => self::BEFORE_THE_THREE]));
 
@@ -78,8 +85,23 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
                 array_values(array_diff($codesAfterUp, ['units.manage'])),
                 $this->codes(),
             );
-        } finally {
-            $this->assertTrue($migrations->migrate());
+        } catch (Throwable $e) {
+            $failure = $e;
+        }
+
+        // Always bring the schema forward again; the first failure, if any, is the one reported.
+        $restoreError = null;
+        try {
+            $restored = $migrations->migrate();
+        } catch (Throwable $e) {
+            $restored = false;
+            $restoreError = $e;
+        }
+        if ($failure !== null) {
+            throw $failure;
+        }
+        if (!$restored) {
+            throw new RuntimeException('The migrations could not be applied again', 0, $restoreError);
         }
 
         $this->assertTrue($this->functionExists());
