@@ -24,6 +24,7 @@ class RlsSectionsUnitsTest extends RlsTestCase
     {
         return [
             'sections' => ['sections'],
+            'units' => ['units'],
         ];
     }
 
@@ -42,6 +43,8 @@ class RlsSectionsUnitsTest extends RlsTestCase
     {
         return match ($table) {
             'sections' => 'INSERT INTO sections (development_id, name, created, modified) VALUES (?, ?, NOW(), NOW())',
+            'units' => "INSERT INTO units (development_id, number, type, created, modified)
+                        VALUES (?, ?, 'house', NOW(), NOW())",
         };
     }
 
@@ -307,6 +310,49 @@ class RlsSectionsUnitsTest extends RlsTestCase
         $column = $this->labelColumn($table);
         $remaining = $this->db()->execute("SELECT {$column} FROM {$table}")->fetchAll();
         $this->assertSame([['b1']], $remaining);
+    }
+
+    /**
+     * @param string $table Table.
+     * @return void
+     */
+    #[DataProvider('tables')]
+    public function testAnExistingLabelInAnotherDevelopmentDoesNotCollideAndSoCannotBeProbed(string $table): void
+    {
+        $this->actAs($this->adminA);
+
+        // 'b1' exists only in development B, which adminA cannot read: the unique key is scoped per development, so
+        // this succeeds instead of answering "duplicate" (which would reveal that B holds it).
+        $this->assertAllowed($this->insertSql($table), [$this->devA, 'b1']);
+        // A real duplicate inside their own development is still refused.
+        $this->assertSame('23505', $this->sqlStateOf($this->insertSql($table), [$this->devA, 'a1']));
+    }
+
+    public function testAUnitCannotPointAtASectionOfAnotherDevelopmentAndTheAnswerHidesWhetherItExists(): void
+    {
+        $own = (int)$this->db()->execute(
+            "INSERT INTO sections (development_id, name, created, modified)
+             VALUES (?, 'own', NOW(), NOW()) RETURNING id",
+            [$this->devA],
+        )->fetch()[0];
+        $foreign = (int)$this->db()->execute("SELECT id FROM sections WHERE name = 'b1'")->fetch()[0];
+        $insert = "INSERT INTO units (development_id, section_id, number, type, created, modified)
+                   VALUES (?, ?, ?, 'house', NOW(), NOW())";
+        $this->actAs($this->dataEntryA);
+
+        $this->assertAllowed($insert, [$this->devA, $own, 'in_own_section']);
+        // The section of B is invisible to this user, and the answer for it equals the answer for a missing id.
+        $this->assertSame('23503', $this->sqlStateOf($insert, [$this->devA, $foreign, 'x']));
+        $this->assertSame('23503', $this->sqlStateOf($insert, [$this->devA, $foreign + 1000, 'x']));
+        // Nor can the row be written into B to use B's section.
+        $this->assertRejected($insert, [$this->devB, $foreign, 'x']);
+
+        // The same holds when an existing unit is moved to another section.
+        $this->assertAllowed("UPDATE units SET section_id = {$own}, modified = NOW() WHERE number = 'a1'");
+        $this->assertSame(
+            '23503',
+            $this->sqlStateOf("UPDATE units SET section_id = {$foreign} WHERE number = 'a2'"),
+        );
     }
 
     /**

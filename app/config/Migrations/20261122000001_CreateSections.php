@@ -36,8 +36,8 @@ class CreateSections extends BaseMigration
             )
         SQL);
         $this->execute(Rls::forbidDevelopmentChange('sections'));
-        $policies = Rls::managedDomainTable('sections', 'units.view', 'units.manage', ['name', 'modified'], ['created']);
-        foreach ($policies as $sql) {
+        $managed = Rls::managedDomainTable('sections', 'units.view', 'units.manage', ['name', 'modified'], ['created']);
+        foreach ($managed as $sql) {
             $this->execute($sql);
         }
     }

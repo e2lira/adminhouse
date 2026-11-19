@@ -10,7 +10,8 @@ use RuntimeException;
 use Throwable;
 
 /**
- * AD6, AD13: the `permission_dev_ids`, `units.manage` and resident-revoke migrations undo exactly what they did.
+ * AD6, AD13: the `permission_dev_ids`, `units.manage` and resident-revoke migrations undo exactly what they did, and
+ * so do the later `sections` and `units` migrations (task 7.6: tables, policies and triggers go away and come back).
  *
  * Rolls the three back on the test database and forwards again, comparing the role/permission rows. The forward run
  * runs even when an assertion fails, so a failure cannot leave later tests on a half-migrated schema, and a failure
@@ -55,6 +56,29 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         )->fetch()[0] === 1;
     }
 
+    /**
+     * @return array{tables: list<string>, policies: int, triggers: int} What the sections and units migrations own.
+     */
+    private function sectionsAndUnits(): array
+    {
+        $tables = array_map(
+            static fn(array $row): string => $row[0],
+            $this->db()->execute(
+                "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('sections', 'units')
+                 ORDER BY tablename",
+            )->fetchAll(),
+        );
+        $policies = (int)$this->db()->execute(
+            "SELECT COUNT(*) FROM pg_policies WHERE tablename IN ('sections', 'units')",
+        )->fetch()[0];
+        $triggers = (int)$this->db()->execute(
+            "SELECT COUNT(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname IN
+                ('sections_forbid_development_change', 'units_forbid_development_change')",
+        )->fetch()[0];
+
+        return ['tables' => $tables, 'policies' => $policies, 'triggers' => $triggers];
+    }
+
     public function testRollingBackRestoresTheMatrixTheThreeMigrationsFoundAndForwardRestoresTheirs(): void
     {
         $migrations = new Migrations(['connection' => 'test_migrations']);
@@ -62,6 +86,8 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         $codesAfterUp = $this->codes();
 
         // The control: the forward state is the one the other tests rely on.
+        $sectionsAndUnitsAfterUp = $this->sectionsAndUnits();
+        $this->assertSame(['tables' => ['sections', 'units'], 'policies' => 8, 'triggers' => 2], $sectionsAndUnitsAfterUp);
         $this->assertTrue($this->functionExists());
         $this->assertContains('administrator:units.manage', $matrixAfterUp);
         $this->assertContains('data_entry:units.manage', $matrixAfterUp);
@@ -79,6 +105,8 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
             $this->assertTrue($migrations->rollback(['target' => self::BEFORE_THE_THREE]));
 
             $this->assertFalse($this->functionExists());
+            // Sections and units, with their policies and triggers, are gone.
+            $this->assertSame(['tables' => [], 'policies' => 0, 'triggers' => 0], $this->sectionsAndUnits());
             // Only the rows the migrations own changed: units.manage went away, one resident row came back.
             $this->assertSame($expectedAfterDown, $this->matrix());
             $this->assertSame(
@@ -105,6 +133,7 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         }
 
         $this->assertTrue($this->functionExists());
+        $this->assertSame($sectionsAndUnitsAfterUp, $this->sectionsAndUnits());
         $this->assertSame($matrixAfterUp, $this->matrix());
         $this->assertSame($codesAfterUp, $this->codes());
     }
