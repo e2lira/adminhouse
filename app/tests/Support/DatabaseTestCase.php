@@ -205,6 +205,50 @@ abstract class DatabaseTestCase extends TestCase
     }
 
     /**
+     * Insert a section with plain SQL (owner connection).
+     *
+     * @param int $developmentId Development id.
+     * @param string $name Section name.
+     * @return int New section id.
+     */
+    protected function seedSection(int $developmentId, string $name = 'Torre A'): int
+    {
+        $this->db()->execute(
+            'INSERT INTO sections (development_id, name, created, modified) VALUES (?, ?, NOW(), NOW())',
+            [$developmentId, $name],
+        );
+
+        return (int)$this->db()->execute(
+            'SELECT id FROM sections WHERE development_id = ? AND name = ?',
+            [$developmentId, $name],
+        )->fetch()[0];
+    }
+
+    /**
+     * Insert an apartment with plain SQL (owner connection).
+     *
+     * @param int $developmentId Development id.
+     * @param int|null $sectionId Section id, or null for a unit with no section.
+     * @param string $number Unit number.
+     * @return int New unit id.
+     */
+    protected function seedUnit(int $developmentId, ?int $sectionId, string $number = '101'): int
+    {
+        $this->db()->execute(
+            "INSERT INTO units (development_id, section_id, number, type, created, modified)
+             VALUES (?, ?, ?, 'apartment', NOW(), NOW())",
+            [$developmentId, $sectionId, $number],
+            ['integer', 'integer', 'string'],
+        );
+
+        return (int)$this->db()->execute(
+            'SELECT id FROM units WHERE development_id = ? AND number = ? AND section_id IS NOT DISTINCT FROM ?',
+            [$developmentId, $number, $sectionId],
+            ['integer', 'string', 'integer'],
+        )->fetch()[0];
+    }
+
+    /**
      * A calendar date relative to today in the business time zone, taken from the database's own `business_today()`
      * (the clock row-level security uses), so a fixture never straddles midnight between the PHP and database
      * clocks and never flakes between 18:00 and 24:00 local time, when UTC is already on the next day.

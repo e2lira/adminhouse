@@ -230,3 +230,7 @@
 | DU-3A-II | developments-units PR 3a-ii: sections and units schema, development-change trigger, managed RLS, per-actor RLS tests, migration rollback evidence (tasks 7.1 to 7.6). | DONE (pending review) | build | Claude | 2026-11-19 |
 
 | DU-3A-II-R1 | developments-units PR 3a-ii review round 1: NaN and length checks, job/anonymous write tests, column privilege matrix, supervisor actor, precise SQLSTATE assertions. | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-3B-I | developments-units PR 3b-i: Sections and Units tables, entities, validation, rules under the save scope, unit and section policies (tasks 8.1 to 8.5). | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-3B-I-R1 | developments-units PR 3b-i review round 1: archived-development guard in the model layer, stored-development policies, malformed id handling, explicit delete refusal, real-database bound tests, mutation checks, 3b-ii binding notes. | DONE (pending review) | build | Claude | 2026-11-19 |
