@@ -224,3 +224,5 @@
 | DU-3A-I | developments-units PR 3a-i (`feat/du-3a-i-permission-dev-ids`): `permission_dev_ids`, managed-domain RLS helper, `units.manage` seed, resident `units.view` revoke, parity and matrix tests (openspec tasks 6.1 to 6.10). | DONE (pending review) | build | Claude | 2026-11-19 |
 
 | DU-3A-I-R1 | developments-units PR 3a-i review round 1 and user decision (read follows permission): two-code `managedDomainTable`, column contract, parity and clock tests, migration rollback test, design amendment A1. | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-3A-I-R2 | developments-units PR 3a-i review round 2: write-implies-read tests and seed invariant, real UPDATE denial read-back, ORM id retrieval check, 3a-ii table contract notes, rollback test group. | DONE (pending review) | build | Claude | 2026-11-19 |

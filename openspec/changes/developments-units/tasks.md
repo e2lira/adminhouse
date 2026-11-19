@@ -192,12 +192,17 @@ Rollback boundary: rollback the migrations (restores resident `units.view`); rev
 - Satisfies: U "Sections", "Unit identity", "Mixed unit types", "Measurements", "Active flag", "Database enforcement"; AD4 trigger.
 - Est. lines: ~400 (fallback split: sections / units)
 
+Notes from review of PR 3a-i (binding):
+- Table contract for `managedDomainTable`: NOT NULL `development_id`; database-generated primary key (no sequence grant is needed, the ORM reads the id from `RETURNING *`); list `modified` among the updatable columns and `created` among the insert-only ones.
+- Cross-table references between managed tables use composite foreign keys `(development_id, x_id)` onto `UNIQUE (development_id, id)`, and unique indexes are scoped per development (for example `UNIQUE (development_id, name)`): foreign-key and unique checks bypass RLS and can leak existence of rows of a development the caller cannot read.
+- Write implies read: every role holding `units.manage` must also hold `units.view` (the seed invariant test enforces it).
+
 Tasks:
 - [ ] 7.1 RED: schema tests for `sections` (name non-blank check, `UNIQUE (development_id, id)`, `UNIQUE (development_id, name)`).
 - [ ] 7.2 RED: schema tests for `units`: number non-blank; type CHECK; `lot_area_m2 > 0`; `indiviso_pct > 0 AND <= 100`; `is_active` default true; composite FK `(development_id, section_id) -> sections`; `UNIQUE NULLS NOT DISTINCT (development_id, section_id, number)`; same number in different section/development accepted; foreign-development section rejected.
 - [ ] 7.3 RED: `forbid_development_id_change()` trigger tests (update of `development_id` rejected).
-- [ ] 7.4 GREEN: migration (up/down) creating both tables, trigger (function reusable by later tables), RLS via `managedDomainTable('sections'|'units', 'units.manage')`.
-- [ ] 7.5 RED/GREEN: RLS tests per actor (super, adminA, dataEntryA, accountantA, resident, adminB, job) per command: SELECT scope (resident sees via `dev_ids()`; documented coarse behavior), INSERT/UPDATE allowed only adminA/dataEntryA/super, DELETE super only (adminA/dataEntryA delete removes no row), cross-development reads/writes see/change nothing, job read-only.
+- [ ] 7.4 GREEN: migration (up/down) creating both tables, trigger (function reusable by later tables), RLS via `managedDomainTable('sections'|'units', 'units.view', 'units.manage', [updatable columns incl. modified], ['created'])` (design A1: reads follow `units.view`).
+- [ ] 7.5 RED/GREEN: RLS tests per actor (super, adminA, dataEntryA, accountantA, resident, adminB, job) per command: SELECT scope (follows `units.view` through `permission_dev_ids`: adminA, dataEntryA, accountantA read; resident and guard hold an assignment but read nothing; design A1), INSERT/UPDATE allowed only adminA/dataEntryA/super, DELETE super only (adminA/dataEntryA delete removes no row), cross-development reads/writes see/change nothing, job read-only.
 - [ ] 7.6 Migration up/down/up; Docs.
 
 Verification: phpunit (alone), phpcs, migrate/rollback/migrate.
