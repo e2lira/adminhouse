@@ -415,6 +415,8 @@ class RoleAssignmentManager
      */
     private function requireExistingDevelopment(int $developmentId, DevelopmentScope $scope): void
     {
+        // Built on the manager's own connection (the runtime role, inside the caller's transaction) rather than taken
+        // from the table locator, whose Developments table may be bound to another connection.
         $developments = new DevelopmentsTable(['connection' => $this->connection()]);
         $found = $developments->find('all', developmentScope: $scope)
             ->select(['Developments.id'])

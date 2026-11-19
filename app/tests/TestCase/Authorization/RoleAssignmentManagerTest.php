@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Authorization;
 
+use App\Authorization\DevelopmentScope;
 use App\Authorization\RoleAssignmentException;
 use App\Authorization\RoleAssignmentManager;
 use App\Authorization\RoleAssignmentNotAllowed;
@@ -13,6 +14,7 @@ use App\Test\Support\DatabaseTestCase;
 use Cake\Chronos\Chronos;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Log\AbstractLogger;
+use ReflectionMethod;
 use Stringable;
 
 /**
@@ -133,6 +135,26 @@ class RoleAssignmentManagerTest extends DatabaseTestCase
             $this->fail('Expected RoleAssignmentNotAllowed');
         } catch (RoleAssignmentNotAllowed) {
             $this->assertSame($before, $this->rows('role_assignments'));
+        }
+    }
+
+    public function testTheExistenceCheckReadsUnderTheScopeItIsGiven(): void
+    {
+        // A super-administrator session: row-level security hides nothing, so only the scope can refuse.
+        $this->actAs($this->root);
+        $check = new ReflectionMethod(RoleAssignmentManager::class, 'requireExistingDevelopment');
+        $manager = new RoleAssignmentManager();
+
+        $check->invoke($manager, $this->devA, DevelopmentScope::only([$this->devA]));
+        $this->addToAssertionCount(1);
+
+        foreach ([$this->devB, 999999] as $id) {
+            try {
+                $check->invoke($manager, $id, DevelopmentScope::only([$this->devA]));
+                $this->fail('A development outside the scope must not be found.');
+            } catch (RoleAssignmentNotAllowed) {
+                $this->addToAssertionCount(1);
+            }
         }
     }
 

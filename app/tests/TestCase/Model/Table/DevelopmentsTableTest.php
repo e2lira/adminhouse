@@ -5,6 +5,9 @@ namespace App\Test\TestCase\Model\Table;
 
 use App\Authorization\AccessControl;
 use App\Authorization\DevelopmentScope;
+use App\Authorization\DevelopmentScopeStack;
+use App\Model\Entity\Development;
+use App\Model\Exception\DevelopmentScopeViolation;
 use App\Model\Exception\MissingDevelopmentScopeException;
 use App\Model\Table\DevelopmentsTable;
 use App\Policy\DevelopmentsTablePolicy;
@@ -13,7 +16,9 @@ use Authentication\Identity;
 use Authorization\AuthorizationServiceInterface;
 use Authorization\IdentityDecorator;
 use Authorization\IdentityInterface;
+use Closure;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * Developments are scoped by their own id (AD3): a read without a scope fails, and the scope narrows what is listed.
@@ -109,13 +114,77 @@ class DevelopmentsTableTest extends DatabaseTestCase
         $this->assertSame(1, $this->developments->find('all', developmentScope: DevelopmentScope::all())->count());
     }
 
-    public function testTheTableRefusesBulkStatements(): void
+    /**
+     * @return array<string, array{\Closure(\App\Model\Table\DevelopmentsTable): mixed}>
+     */
+    public static function bulkStatements(): array
+    {
+        return [
+            'updateAll' => [fn(DevelopmentsTable $table) => $table->updateAll(['name' => 'x'], ['id >' => 0])],
+            'deleteAll' => [fn(DevelopmentsTable $table) => $table->deleteAll(['id >' => 0])],
+        ];
+    }
+
+    #[DataProvider('bulkStatements')]
+    public function testTheTableRefusesBulkStatements(Closure $statement): void
+    {
+        $this->createDevelopment('Residencial Norte');
+        $this->actAsSuperAdministrator();
+
+        try {
+            $statement($this->developments);
+            $this->fail('A bulk statement on developments must be refused.');
+        } catch (LogicException) {
+            $this->assertSame(1, $this->developments->find('all', developmentScope: DevelopmentScope::all())->count());
+        }
+    }
+
+    /**
+     * @return \App\Model\Entity\Development
+     */
+    private function newDevelopment(): Development
+    {
+        /** @var \App\Model\Entity\Development $development */
+        $development = $this->developments->newEntity([
+            'type' => 'condominium',
+            'name' => 'Residencial Nuevo',
+            'section_label' => 'Torre',
+            'number_label' => 'Departamento',
+        ]);
+
+        return $development;
+    }
+
+    public function testASaveOfANewDevelopmentUnderASingleDevelopmentScopeIsRefused(): void
+    {
+        $north = $this->createDevelopment('Residencial Norte');
+        $this->actAsSuperAdministrator();
+
+        try {
+            DevelopmentScopeStack::run(
+                DevelopmentScope::only([$north]),
+                fn() => $this->developments->save($this->newDevelopment()),
+            );
+            $this->fail('Only an all-development scope may create a development.');
+        } catch (DevelopmentScopeViolation) {
+            $this->assertSame(1, $this->developments->find('all', developmentScope: DevelopmentScope::all())->count());
+        }
+    }
+
+    public function testAnAllDevelopmentScopeMayCreateOne(): void
     {
         $this->actAsSuperAdministrator();
 
-        $this->expectException(LogicException::class);
+        $saved = DevelopmentScopeStack::run(
+            DevelopmentScope::all(),
+            fn() => $this->developments->save($this->newDevelopment()),
+        );
 
-        $this->developments->deleteAll(['id >' => 0]);
+        $this->assertInstanceOf(Development::class, $saved);
+        $this->assertSame(
+            ['Residencial Nuevo'],
+            $this->names($this->developments->find('all', developmentScope: DevelopmentScope::all())),
+        );
     }
 
     public function testTheIndexPolicyNarrowsAQueryToTheScopeOfTheUser(): void
