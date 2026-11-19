@@ -179,6 +179,21 @@ class AccessControlTest extends DatabaseTestCase
         $this->assertSame($expected, array_column($rows, 'code'));
     }
 
+    public function testNoRoleHoldsDevelopmentsManageAndOnlyTheSuperAdministratorIsGrantedIt(): void
+    {
+        $dev = $this->createDevelopment('A');
+        $root = $this->createUser('root');
+        $this->assignRole($root, 'super_administrator', null);
+
+        $this->assertTrue($this->access->allowedFor($root, 'developments.manage')->isAll());
+
+        foreach (['administrator', 'accountant', 'data_entry', 'supervisor', 'guard', 'resident'] as $role) {
+            $user = $this->createUser('u_' . $role);
+            $this->assignRole($user, $role, $dev);
+            $this->assertTrue($this->access->allowedFor($user, 'developments.manage')->isEmpty(), $role);
+        }
+    }
+
     public function testSuperAdministratorHasNoExplicitRows(): void
     {
         $count = $this->db()->execute(

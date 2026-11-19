@@ -79,6 +79,20 @@ class RlsTenancyPoliciesTest extends RlsTestCase
         $this->assertAllowed('DELETE FROM developments WHERE id = ?', [$this->devB]);
     }
 
+    public function testOnlySuperAdministratorWritesTheProfileAndArchiveColumns(): void
+    {
+        $update = 'UPDATE developments SET address = ?, bank_account = ?, archived_at = NOW() WHERE id = ?';
+
+        foreach (['adminA', 'accountantA', 'resident', 'loner'] as $user) {
+            $this->actAs($this->{$user});
+            $this->assertDenied($update, ['Calle 1', '0123', $this->devA]);
+            $this->endSession();
+        }
+
+        $this->actAs($this->superUser);
+        $this->assertAllowed($update, ['Calle 1', '0123', $this->devA]);
+    }
+
     // people ------------------------------------------------------------------------------------------------------
 
     public function testNoSessionSeesNoPeople(): void
