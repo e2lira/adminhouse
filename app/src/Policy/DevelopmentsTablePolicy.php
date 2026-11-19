@@ -36,6 +36,19 @@ class DevelopmentsTablePolicy
     }
 
     /**
+     * May the user create a development (`developments.manage`)? Only an all-development scope can: a new
+     * development belongs to no existing one. No role holds it; the super-administrator does everywhere.
+     *
+     * @param \Authorization\IdentityInterface $user Identity.
+     * @param mixed $resource Table the development would be added to.
+     * @return bool
+     */
+    public function canAdd(IdentityInterface $user, mixed $resource): bool
+    {
+        return $this->access->allowedFor((int)$user->getIdentifier(), DevelopmentPolicy::MANAGE)->isAll();
+    }
+
+    /**
      * Hands the user's scope to the query as the `developmentScope` option, which DevelopmentsTable enforces.
      *
      * @param \Authorization\IdentityInterface $user Identity.

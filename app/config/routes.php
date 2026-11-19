@@ -58,6 +58,28 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/logout', ['controller' => 'Users', 'action' => 'logout']);
         $builder->connect('/developments', ['controller' => 'Developments', 'action' => 'index', '_method' => 'GET']);
 
+        // Development management: super-administrator only. There is deliberately no delete route (archive instead).
+        $builder->connect(
+            '/developments/add',
+            ['controller' => 'Developments', 'action' => 'add', '_method' => ['GET', 'POST']],
+        );
+        $managed = ['id' => '[0-9]+', 'pass' => ['id']];
+        $builder->connect(
+            '/developments/{id}/edit',
+            ['controller' => 'Developments', 'action' => 'edit', '_method' => ['GET', 'POST']],
+            $managed,
+        );
+        $builder->connect(
+            '/developments/{id}/archive',
+            ['controller' => 'Developments', 'action' => 'archive', '_method' => 'POST'],
+            $managed,
+        );
+        $builder->connect(
+            '/developments/{id}/unarchive',
+            ['controller' => 'Developments', 'action' => 'unarchive', '_method' => 'POST'],
+            $managed,
+        );
+
         $assignments = '/developments/{developmentId}/role-assignments';
         $constraints = ['developmentId' => '[0-9]+', 'assignmentId' => '[0-9]+'];
         $builder->connect(
