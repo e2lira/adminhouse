@@ -349,13 +349,28 @@ final class RowLevelSecurity
             self::policy($table, 'DELETE', $write),
             self::grant($table, 'SELECT, INSERT, UPDATE, DELETE'),
             self::grantDefiner($table),
-            sprintf(
-                'CREATE TRIGGER %s BEFORE UPDATE ON %s FOR EACH ROW '
-                . 'EXECUTE FUNCTION public.forbid_development_id_change()',
-                self::identifier($table . '_forbid_development_change'),
-                self::identifier($table),
-            ),
+            self::forbidDevelopmentChange($table),
         ];
+    }
+
+    /**
+     * Trigger that rejects any UPDATE changing a row's `development_id` (check_violation), for the owner and the
+     * definer roles too. The runtime role has no UPDATE privilege on that column; this guards the other logins.
+     *
+     * Uses the generic function `public.forbid_development_id_change()`, so any table with a `development_id` can
+     * reuse it. Dropped with the table.
+     *
+     * @param string $table Table name.
+     * @return string
+     */
+    public static function forbidDevelopmentChange(string $table): string
+    {
+        return sprintf(
+            'CREATE TRIGGER %s BEFORE UPDATE ON %s FOR EACH ROW '
+            . 'EXECUTE FUNCTION public.forbid_development_id_change()',
+            self::identifier($table . '_forbid_development_change'),
+            self::identifier($table),
+        );
     }
 
     /**
