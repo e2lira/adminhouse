@@ -123,16 +123,15 @@ class RoleAssignmentsController extends AppController
      */
     private function managedDevelopment(int|string $developmentId): Development
     {
-        // Outside the user's scope and nonexistent answer alike (AC-MD-1); the same scope then reads the row.
+        // The scope of `role_assignments.manage` is the whole rule: a development outside it and a nonexistent one
+        // answer the same 404 (AC-MD-1). The entity is then read under that same scope, and authorize() records the
+        // policy check that default deny requires; it agrees with the scope by construction.
         $id = $this->DevelopmentScope->development($developmentId, RoleAssignmentManager::PERMISSION);
         /** @var \App\Model\Entity\Development $development */
         $development = $this->fetchTable('Developments')->get(
             $id,
             developmentScope: $this->DevelopmentScope->for(RoleAssignmentManager::PERMISSION),
         );
-        if (!$this->Authorization->can($development, 'manageRoleAssignments')) {
-            throw new NotFoundException();
-        }
         $this->Authorization->authorize($development, 'manageRoleAssignments');
 
         return $development;

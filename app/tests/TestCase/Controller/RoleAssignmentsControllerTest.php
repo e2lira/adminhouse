@@ -255,6 +255,28 @@ class RoleAssignmentsControllerTest extends DatabaseTestCase
         $this->assertSame(1, $this->countAssignments());
     }
 
+    public function testPostsToAnotherDevelopmentAndToAMissingOneAnswerTheSame(): void
+    {
+        $this->signInAdminOfA();
+        $this->createUser('bob');
+        $this->enableCsrfToken();
+        $normalize = static fn(string $body): string => (string)preg_replace('~/developments/\d+/~', '/developments/N/', $body);
+
+        $answers = [];
+        foreach ([$this->devB, 999999] as $development) {
+            $this->post($this->indexUrl($development), $this->grantData());
+            $add = [$this->_response->getStatusCode(), $normalize((string)$this->_response->getBody())];
+            $this->post($this->endUrl($development, 1), []);
+            $end = [$this->_response->getStatusCode(), $normalize((string)$this->_response->getBody())];
+            $answers[] = [$add, $end];
+        }
+
+        $this->assertSame(404, $answers[0][0][0]);
+        $this->assertSame(404, $answers[0][1][0]);
+        $this->assertSame($answers[0], $answers[1]);
+        $this->assertSame(1, $this->countAssignments());
+    }
+
     public function testGrantingSuperAdministratorIsRejectedWithAFriendlyMessage(): void
     {
         $this->signInAdminOfA();
