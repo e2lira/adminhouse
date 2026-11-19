@@ -112,4 +112,31 @@ class DefaultDenyTest extends DatabaseTestCase
             );
         }
     }
+
+    public function testEveryRoutedDevelopmentActionAuthorizesBeforeItAnswers(): void
+    {
+        $dev = $this->createDevelopment('Residencial Norte');
+        $root = $this->signInAs('root');
+        $this->assignRole($root, 'super_administrator', null);
+        Configure::write('debug', false);
+
+        $walked = [];
+        foreach (Router::routes() as $route) {
+            if (($route->defaults['controller'] ?? null) !== 'Developments') {
+                continue;
+            }
+            $methods = (array)($route->defaults['_method'] ?? ['GET']);
+            $url = str_replace('{id}', (string)$dev, $route->template);
+            foreach ($methods as $method) {
+                $method === 'POST' ? $this->post($url, []) : $this->get($url);
+                // An action that skipped authorization is refused by the middleware with a 500.
+                $this->assertLessThan(500, $this->_response->getStatusCode(), $method . ' ' . $url);
+                $walked[$route->defaults['action'] . ' ' . $method] = true;
+            }
+        }
+
+        foreach (['index GET', 'add GET', 'add POST', 'edit GET', 'edit POST', 'archive POST', 'unarchive POST'] as $expected) {
+            $this->assertArrayHasKey($expected, $walked, $expected . ' must be routed and walked');
+        }
+    }
 }
