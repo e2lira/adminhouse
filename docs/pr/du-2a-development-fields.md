@@ -12,6 +12,7 @@ PR 2a of `developments-units` (tasks 4.1 to 4.8, AD6 and decisions D1, D2, D3). 
 |---|---|---|
 | Schema and permission | `feat(app): add development profile fields, archive state and developments.manage` | Migration `20261120000001`: `address`, `phone`, `rfc`, `bank_name`, `bank_account` (`text NULL`) and `archived_at` (`timestamp NULL`) on `developments`; seeds `developments.manage` with no role rows. Tests: columns exist and are nullable, a new development has all six empty, the permission exists and no role holds it, no non-super session may write the new columns (RLS unchanged), `developments.manage` resolves to an empty scope for every fixed role and to all developments for the super-administrator. |
 | Validation | `feat(app): validate development fields and keep id and archive state out of mass assignment` | `DevelopmentsTable::validationDefault`: type (`condominium` or `subdivision`), name, section label, number label and time zone (a known zone) are required and cannot be blank; the five profile fields are optional and may be empty. `Development` keeps `id` and `archived_at` out of mass assignment: archiving is its own action in PR 2b. The saving tests of PR 1b now send a time zone, which is required. |
+| Review round 1 | `fix(app): normalize, trim and bound development text fields and allow-list assignable fields`, `test(app): cover super-administrator dates, column writes and schema checks for developments` | Optional profile fields are trimmed and stored as NULL when empty or blank; required text is trimmed; maximum lengths (150 name and labels, 255 address and bank name, 32 phone, RFC and bank account; no format rules); `Development::_accessible` is an explicit allow-list of the ten editable fields. Tests: save and reload round trip, patch of an existing development, over-length and invalid-value providers, super-administrator expired, future, read-only, disabled and ends-today cases, RLS write and read-back of all new columns, cleaner schema assertions. |
 | Policy | `feat(app): let only the super-administrator edit or archive a development` | `DevelopmentPolicy::canEdit` and `canArchive` ask `AccessControl` for `developments.manage` (one mechanism, no hard-coded role check): true for the super-administrator, false for administrator, accountant, data_entry, supervisor, guard, resident, a read-only administrator and a user with no assignment. |
 | Docs | `docs: record developments-units PR 2a` | This description, change-log, tasks, progress, test-results, openspec tasks. |
 
@@ -24,10 +25,10 @@ PR 2a of `developments-units` (tasks 4.1 to 4.8, AD6 and decisions D1, D2, D3). 
 
 ## Verification
 
-- `vendor/bin/phpunit` (run alone, real PostgreSQL): `OK (579 tests, 1936 assertions)`; the new tests were seen failing first (columns, permission, validation and policy methods missing).
+- `vendor/bin/phpunit` (run alone, real PostgreSQL): `OK (624 tests, 2020 assertions)` after review round 1; the new tests were seen failing first (columns, permission, validation and policy methods missing; later, normalization, allow-list and length limits).
 - `vendor/bin/phpcs`: clean (exit 0)
-- Migrations: `bin/cake migrations migrate -c migrations`, `rollback`, `migrate` run on the development database `kualitet_app` without errors; the test database is rebuilt from scratch by the test migrator on every run.
-- Not verified: `down()` with real profile or archive data in the columns (they are dropped with their data, by design); no manual check in a browser (no screen in this PR); GitHub Actions (not pushed).
+- Migrations, from `app`, on the development database `kualitet_app`: `bin/cake migrations migrate -c migrations`, then `bin/cake migrations rollback -c migrations`, then `bin/cake migrations migrate -c migrations`. All three finished without errors and the final status shows `20261120000001` as `up`. The test database is rebuilt from scratch by the test migrator on every run. The default connection cannot migrate (no CREATE on `public`); `-c migrations` is required.
+- Not verified: `down()` was not run against populated columns (the columns held no data when it ran); it drops them with their data, by design, and it deletes any `role_permissions` rows that point to `developments.manage`; no manual check in a browser (no screen in this PR); GitHub Actions (not pushed).
 
 ## Database and row-level security
 
@@ -44,7 +45,7 @@ Run the migration with the migrations connection (`bin/cake migrations migrate -
 
 ## Known limits and follow-ups
 
-- Size: 426 changed lines in `app` (158 in `app/src` and `app/config`, the rest tests) against a ~300 estimate; most of the excess is test matrices.
+- Size: 679 changed lines in `app` (212 in `app/src` and `app/config`, the rest tests) against a ~300 estimate; most of the excess is test matrices and review-round tests.
 - `canManageUnits`, `canManagePeople` and `canManageOccupancies` are not added here; they arrive with the code that uses them (PR 2b, task 5.4 and later).
 - Validation of RFC, phone and bank account format is not enforced (optional free text, per the spec); a later change can add format rules.
 - `timezone` is now required when creating through the ORM although the column has a database default, because the spec lists it as a field of a valid development.

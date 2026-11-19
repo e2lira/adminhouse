@@ -137,6 +137,11 @@ Rollback boundary: roll back migration then revert PR.
 - Satisfies: DM all requirements, AC-MD-1/2, labels part of AC-MD-3 (AD5, W-E).
 - Est. lines: ~380 (fallback split: 2b-i add/edit, 2b-ii archive/unarchive)
 
+Notes from review of PR 2a (carry into 2b):
+- `timezone` is required on create (validation); the add form must default it to `America/Mexico_City`.
+- Save results must be asserted: a `false` or 0-row save (the scoped update throws or returns false) must surface as an error, never as a success flash.
+- `bank_account`, `rfc` and `phone` are readable by every role that sees the development at the database level (coarse model). Read screens must select fields explicitly; which roles see the bank fields is a pending product decision.
+
 Tasks:
 - [ ] 5.1 RED: integration tests: super creates with and without optional fields (AC-MD-2); administrator, data_entry, read-only get refused on add/edit/archive; non-super opening edit of B gets 404; no delete route exists (router assertion).
 - [ ] 5.2 GREEN: `DevelopmentsController` add/edit, templates (Spanish copy), explicit routes `[0-9]+`.

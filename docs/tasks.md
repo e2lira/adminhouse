@@ -214,3 +214,5 @@
 | DU-1B-R1 | developments-units PR 1b review round 1 fixes (component memo and id guard, RLS-independent tests, existence-check and write-contract tests, single gate in `managedDevelopment`). | DONE (pending review) | build | Claude | 2026-11-18 |
 
 | DU-2A | developments-units PR 2a (`feat/du-2a-development-fields`): development profile fields, archive state, `developments.manage`, validation and policy methods (openspec tasks 4.1 to 4.8). | DONE (pending review) | build | Claude | 2026-11-18 |
+
+| DU-2A-R1 | developments-units PR 2a review round 1 fixes (normalization, allow-list, length limits, assignment-date and RLS column tests, PR notes for 2b). | DONE (pending review) | build | Claude | 2026-11-18 |
