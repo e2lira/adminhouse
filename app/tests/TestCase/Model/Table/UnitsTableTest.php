@@ -407,6 +407,22 @@ class UnitsTableTest extends DatabaseTestCase
         $this->assertArrayHasKey('number', $clash->getErrors());
     }
 
+    public function testTheActiveFlagIsNeverAssignedFromRequestData(): void
+    {
+        $north = $this->createDevelopment('Norte');
+        $id = $this->seedUnit($north, null, '101');
+        $this->actAsSuperAdministrator();
+        $scope = DevelopmentScope::only([$north]);
+
+        $created = $this->units->newEntity(self::payload(['is_active' => false]));
+        $this->assertNull($created->get('is_active'));
+
+        $unit = $this->units->get($id, developmentScope: $scope);
+        $this->units->patchEntity($unit, ['is_active' => false, 'number' => '102']);
+        $this->assertTrue($unit->is_active);
+        $this->assertSame('102', $unit->number);
+    }
+
     public function testAUnitCanBeDeactivatedAndReactivatedWithoutLosingTheRow(): void
     {
         $north = $this->createDevelopment('Norte');
@@ -416,9 +432,9 @@ class UnitsTableTest extends DatabaseTestCase
         /** @var \App\Model\Entity\Unit $unit */
         $unit = $this->units->get($id, developmentScope: $scope);
 
-        $this->assertNotFalse($this->units->save($this->units->patchEntity($unit, ['is_active' => false]), ['developmentScope' => $scope]));
+        $this->assertNotFalse($this->units->save($this->units->patchEntity($unit->set('is_active', false), []), ['developmentScope' => $scope]));
         $this->assertFalse($this->units->get($id, developmentScope: $scope)->get('is_active'));
-        $this->assertNotFalse($this->units->save($this->units->patchEntity($unit, ['is_active' => true]), ['developmentScope' => $scope]));
+        $this->assertNotFalse($this->units->save($this->units->patchEntity($unit->set('is_active', true), []), ['developmentScope' => $scope]));
         $this->assertTrue($this->units->get($id, developmentScope: $scope)->get('is_active'));
     }
 

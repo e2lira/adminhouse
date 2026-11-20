@@ -78,6 +78,18 @@ class DevelopmentScopeComponent extends Component
     }
 
     /**
+     * The id of a record named in the URL, for the controllers of the records inside a development.
+     *
+     * @param string|int $value Id as received.
+     * @return int The id, when it is a canonical positive integer that fits a bigint.
+     * @throws \Cake\Http\Exception\NotFoundException Otherwise: a malformed id is a record that does not exist.
+     */
+    public function recordId(int|string $value): int
+    {
+        return $this->parseId($value) ?? throw new NotFoundException();
+    }
+
+    /**
      * @param string|int $value Id as received.
      * @return int|null The id when it is a canonical positive integer that fits a bigint, otherwise null.
      */

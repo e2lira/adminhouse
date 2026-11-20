@@ -80,6 +80,40 @@ return function (RouteBuilder $routes): void {
             $managed,
         );
 
+        // Units and their sections (sections are created inline). There is deliberately no delete route for either:
+        // a unit is deactivated, and only the super-administrator deletes rows, at the database.
+        $units = '/developments/{developmentId}/units';
+        $inDevelopment = ['developmentId' => '[0-9]+', 'id' => '[0-9]+'];
+        $development = $inDevelopment + ['pass' => ['developmentId']];
+        $unit = $inDevelopment + ['pass' => ['developmentId', 'id']];
+        $builder->connect($units, ['controller' => 'Units', 'action' => 'index', '_method' => 'GET'], $development);
+        $builder->connect(
+            $units . '/add',
+            ['controller' => 'Units', 'action' => 'add', '_method' => ['GET', 'POST']],
+            $development,
+        );
+        $builder->connect(
+            $units . '/sections',
+            ['controller' => 'Units', 'action' => 'addSection', '_method' => 'POST'],
+            $development,
+        );
+        $builder->connect($units . '/{id}', ['controller' => 'Units', 'action' => 'view', '_method' => 'GET'], $unit);
+        $builder->connect(
+            $units . '/{id}/edit',
+            ['controller' => 'Units', 'action' => 'edit', '_method' => ['GET', 'POST']],
+            $unit,
+        );
+        $builder->connect(
+            $units . '/{id}/activate',
+            ['controller' => 'Units', 'action' => 'activate', '_method' => 'POST'],
+            $unit,
+        );
+        $builder->connect(
+            $units . '/{id}/deactivate',
+            ['controller' => 'Units', 'action' => 'deactivate', '_method' => 'POST'],
+            $unit,
+        );
+
         $assignments = '/developments/{developmentId}/role-assignments';
         $constraints = ['developmentId' => '[0-9]+', 'assignmentId' => '[0-9]+'];
         $builder->connect(

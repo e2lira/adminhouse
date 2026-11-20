@@ -91,4 +91,60 @@ class ConstraintViolationTest extends TestCase
         $this->assertNotNull($violation);
         $this->assertStringNotContainsString('secret', $violation->field());
     }
+
+    public function testTheConstraintNameIsTheLastQuotedIdentifierOfTheMessage(): void
+    {
+        // Under row-level security PostgreSQL leaves the DETAIL line out, so the name is all that identifies the key.
+        $unique = ConstraintViolation::from($this->driverError(
+            '23505',
+            'ERROR:  llave duplicada viola restricción de unicidad «units_development_id_number_key»',
+        ));
+        $foreign = ConstraintViolation::from($this->driverError(
+            '23503',
+            'ERROR: insert or update on table "units" violates foreign key constraint "units_section_fkey"',
+        ));
+
+        $this->assertSame('units_development_id_number_key', $unique?->constraint);
+        $this->assertSame('_constraint', $unique->field());
+        $this->assertSame('units_section_fkey', $foreign?->constraint);
+    }
+
+    public function testTheReferencedSideOfAForeignKeyNamesTheConstraintNotTheTable(): void
+    {
+        $english = ConstraintViolation::from($this->driverError(
+            '23503',
+            'ERROR: update or delete on table "sections" violates foreign key constraint "units_section_fkey" on table "units"',
+        ));
+        $spanish = ConstraintViolation::from($this->driverError(
+            '23503',
+            'ERROR: update o delete en la tabla «sections» viola la llave foránea «units_section_fkey» en la tabla «units»',
+        ));
+
+        $this->assertSame('units_section_fkey', $english?->constraint);
+        $this->assertSame('units_section_fkey', $spanish?->constraint);
+    }
+
+    public function testAQuotedNameThatIsNotAConstraintIsNotTaken(): void
+    {
+        $this->assertNull(ConstraintViolation::from($this->driverError(
+            '23505',
+            'ERROR: something about "units" happened',
+        ))?->constraint);
+    }
+
+    public function testAMessageWithoutAQuotedNameHasNoConstraint(): void
+    {
+        $this->assertNull(ConstraintViolation::from($this->driverError('23505', 'Key (name)=(x) already exists.'))?->constraint);
+    }
+
+    public function testColumnsLookedUpByConstraintNameAreUsedForTheField(): void
+    {
+        $violation = ConstraintViolation::from($this->driverError('23505', 'ERROR: x "k"'));
+
+        $resolved = $violation?->withColumns(['development_id', 'section_id', 'number']);
+
+        $this->assertSame('number', $resolved?->field());
+        $this->assertSame('_unique', $resolved->rule);
+        $this->assertSame('_constraint', $violation->field());
+    }
 }

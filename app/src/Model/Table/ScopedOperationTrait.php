@@ -41,7 +41,7 @@ trait ScopedOperationTrait
                 fn() => DevelopmentScopeStack::run($scope, fn() => parent::save($entity, $options)),
             );
         } catch (Throwable $e) {
-            $violation = $convert ? ConstraintViolation::from($e) : null;
+            $violation = $convert ? $this->violationOf($e) : null;
             if ($violation === null || !$this->getSchema()->hasColumn($violation->field())) {
                 throw $e;
             }
@@ -62,6 +62,40 @@ trait ScopedOperationTrait
     public function delete(EntityInterface $entity, array $options = []): bool
     {
         return DevelopmentScopeStack::run($this->operationScope($options), fn() => parent::delete($entity, $options));
+    }
+
+    /**
+     * The violation behind an error, with its columns. A session under row-level security gets no DETAIL line, so the
+     * columns are read from the catalog by the constraint name, for a constraint of THIS table only (a violation
+     * raised by another table finds no columns and stays unattributed). Safe because the caller only converts when the
+     * failed statement was rolled back on its own: inside a caller-held transaction without savepoints `$convert` is
+     * false, this method is never reached and the exception is rethrown (a lookup there would run in an aborted
+     * transaction; pinned by `testACallerTransactionWithoutSavepointsGetsTheViolationRethrown`). If the lookup fails
+     * anyway the violation stays unattributed and the caller rethrows.
+     *
+     * @param \Throwable $error Error thrown by the save.
+     * @return \App\Database\ConstraintViolation|null
+     */
+    private function violationOf(Throwable $error): ?ConstraintViolation
+    {
+        $violation = ConstraintViolation::from($error);
+        if ($violation === null || $violation->field() !== '_constraint' || $violation->constraint === null) {
+            return $violation;
+        }
+
+        try {
+            $columns = $this->getConnection()->execute(
+                'SELECT a.attname FROM pg_constraint c
+                 JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+                 WHERE c.conrelid = to_regclass(?) AND c.conname = ?
+                 ORDER BY array_position(c.conkey, a.attnum)',
+                [$this->getTable(), $violation->constraint],
+            )->fetchAll('assoc') ?: [];
+        } catch (Throwable) {
+            return $violation;
+        }
+
+        return $violation->withColumns(array_map(fn(array $row): string => (string)$row['attname'], $columns));
     }
 
     /**
