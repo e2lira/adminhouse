@@ -317,4 +317,144 @@ class DefaultDenyTest extends DatabaseTestCase
         $this->assertArrayHasKey('addSection GET', $statuses);
         $this->assertArrayHasKey('index POST', $statuses);
     }
+
+    /**
+     * Walk every routed People action with a fresh development and person per request, and check the exact status.
+     *
+     * @param array<string, int> $expected Status per `action METHOD`.
+     * @param callable(int): void $prepare Called with each fresh development id before its request.
+     * @return void
+     */
+    private function walkPeopleRoutes(array $expected, callable $prepare): void
+    {
+        $debug = Configure::read('debug');
+        Configure::write('debug', false);
+        $walked = [];
+        try {
+            foreach (Router::routes() as $route) {
+                if (($route->defaults['controller'] ?? null) !== 'People') {
+                    continue;
+                }
+                foreach ((array)($route->defaults['_method'] ?? ['GET']) as $method) {
+                    $key = $route->defaults['action'] . ' ' . $method;
+                    $dev = $this->createDevelopment('Walk ' . count($walked));
+                    $person = $this->createPerson('Persona ' . count($walked), [$dev]);
+                    $prepare($dev);
+                    $url = str_replace(['{developmentId}', '{id}'], [(string)$dev, (string)$person], $route->template);
+                    $method === 'POST' ? $this->post($url, []) : $this->get($url);
+                    $walked[$key] = $this->_response->getStatusCode();
+                }
+            }
+        } finally {
+            Configure::write('debug', $debug);
+        }
+
+        ksort($walked);
+        ksort($expected);
+        $this->assertSame($expected, $walked);
+    }
+
+    public function testEveryRoutedPeopleActionAnswersWritersWithItsExactStatus(): void
+    {
+        $user = $this->signInAs('ann');
+
+        $this->walkPeopleRoutes([
+            'index GET' => 200, 'add GET' => 200, 'add POST' => 200, 'edit GET' => 200, 'edit POST' => 302,
+        ], fn(int $dev) => $this->assignRole($user, 'data_entry', $dev));
+    }
+
+    public function testEveryRoutedPeopleActionLetsAReaderReadAndRefusesItTheWrites(): void
+    {
+        $user = $this->signInAs('ann');
+
+        $this->walkPeopleRoutes([
+            'index GET' => 200, 'add GET' => 403, 'add POST' => 403, 'edit GET' => 403, 'edit POST' => 403,
+        ], fn(int $dev) => $this->assignRole($user, 'accountant', $dev));
+    }
+
+    public function testEveryRoutedPeopleActionRefusesAResident(): void
+    {
+        $user = $this->signInAs('ann');
+
+        $this->walkPeopleRoutes(
+            array_fill_keys(['index GET', 'add GET', 'add POST', 'edit GET', 'edit POST'], 403),
+            fn(int $dev) => $this->assignRole($user, 'resident', $dev),
+        );
+    }
+
+    public function testEveryRoutedPeopleActionAnswers404ToAnAdministratorOfAnotherDevelopment(): void
+    {
+        $user = $this->signInAs('ann');
+        $other = $this->createDevelopment('Other');
+        $this->assignRole($user, 'administrator', $other);
+
+        $this->walkPeopleRoutes(
+            array_fill_keys(['index GET', 'add GET', 'add POST', 'edit GET', 'edit POST'], 404),
+            fn(int $dev) => null,
+        );
+    }
+
+    public function testEveryRoutedPeopleActionRefusesAUserWithNoAssignment(): void
+    {
+        $this->signInAs('ann');
+
+        $this->walkPeopleRoutes(
+            array_fill_keys(['index GET', 'add GET', 'add POST', 'edit GET', 'edit POST'], 403),
+            fn(int $dev) => null,
+        );
+    }
+
+    public function testEveryRoutedPeopleActionAnswersTheSuperAdministratorWithItsExactStatus(): void
+    {
+        $root = $this->signInAs('root');
+        $this->assignRole($root, 'super_administrator', null);
+
+        $this->walkPeopleRoutes([
+            'index GET' => 200, 'add GET' => 200, 'add POST' => 200, 'edit GET' => 200, 'edit POST' => 302,
+        ], fn(int $dev) => null);
+    }
+
+    /**
+     * Every people route refused for the method it does not accept, as an administrator who could use the right one:
+     * the exact status, and no state changed (a GET must never create or change anyone).
+     */
+    public function testEveryPeopleRouteRefusesTheMethodItDoesNotAccept(): void
+    {
+        $user = $this->signInAs('ann');
+        $debug = Configure::read('debug');
+        Configure::write('debug', false);
+        $statuses = [];
+        try {
+            foreach (Router::routes() as $route) {
+                if (($route->defaults['controller'] ?? null) !== 'People') {
+                    continue;
+                }
+                $accepted = (array)($route->defaults['_method'] ?? ['GET']);
+                foreach (array_diff(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], $accepted) as $method) {
+                    $dev = $this->createDevelopment('Opposite ' . count($statuses));
+                    $this->assignRole($user, 'administrator', $dev);
+                    $person = $this->createPerson('Persona ' . count($statuses), [$dev]);
+                    $url = str_replace(['{developmentId}', '{id}'], [(string)$dev, (string)$person], $route->template);
+                    $this->_sendRequest($url, $method, ['name' => 'Cambiada']);
+                    $statuses[$route->defaults['action'] . ' ' . $method] = $this->_response->getStatusCode();
+                    $this->assertSame(
+                        [['Persona ' . (count($statuses) - 1)]],
+                        $this->db()->execute('SELECT name FROM people WHERE id = ?', [$person])->fetchAll(),
+                    );
+                    $this->assertSame(
+                        1,
+                        (int)$this->db()->execute('SELECT COUNT(*) FROM person_developments WHERE development_id = ?', [$dev])->fetch()[0],
+                    );
+                }
+            }
+        } finally {
+            Configure::write('debug', $debug);
+        }
+
+        $this->assertNotEmpty($statuses);
+        $this->assertSame([404], array_values(array_unique($statuses)), json_encode($statuses));
+        $this->assertArrayHasKey('index POST', $statuses);
+        $this->assertArrayHasKey('add DELETE', $statuses);
+        $this->assertArrayHasKey('edit PUT', $statuses);
+    }
 }

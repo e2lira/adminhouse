@@ -246,3 +246,11 @@
 | DU-4A-II | developments-units PR 4a-ii: people and person_developments reads follow `people.view` (migration `20261123000002`, design A2, tasks 10.9 to 10.12). | DONE (pending review) | build | Claude | 2026-11-19 |
 
 | DU-4A-II-R1 | developments-units PR 4a-ii review round 1: people policy proven independently of the link policy, inactive/future/unassigned own-person cases, mixed actor, policy-name snapshot (task 10.13). | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-4B-I | developments-units PR 4b-i: `PeopleTable` (through), `Person`, `createFor()`, write guard for through-mode tables, `PeopleTablePolicy`, `PersonPolicy`, `DomainAccess` (tasks 11.1 to 11.4). | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-4B-I-R1 | developments-units PR 4b-i review round 1: delete refused, control characters rejected, intended edit edge cases pinned and documented (design A3), extra tests. | DONE (pending review) | build | Claude | 2026-11-20 |
+
+| DU-4B-II | developments-units PR 4b-ii: `PeopleController`, people templates and routes, default-deny walks (tasks 11.5 to 11.8). | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-4B-II-R1 | developments-units PR 4b-ii review round 1: edit scope proven, paging and sort contract, edit validation cases, Spanish control-character copy, design A4. | DONE (pending review) | build | Claude | 2026-11-20 |

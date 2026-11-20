@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Test\TestCase\Architecture;
 
 use App\Model\Table\DevelopmentsTable;
+use App\Model\Table\PeopleTable;
 use App\Model\Table\RoleAssignmentsTable;
 use App\Test\Support\Architecture\Fixtures\AliasedScopedTable;
 use App\Test\Support\Architecture\Fixtures\GuardedTable;
@@ -122,6 +123,25 @@ class ScopedTableArchitectureTest extends TestCase
         $this->assertTrue(ScopedTableAudit::isScoped($developments));
         $this->assertContains('developments', ScopedTableAudit::scopedTableNames($tables));
         $this->assertSame([], ScopedTableAudit::missingBulkGuard([$developments]));
+        $this->assertSame([], ScopedTableAudit::associationProblems($tables, []));
+    }
+
+    public function testPeopleIsScopedThroughItsLinksWithTheBulkGuardAndNoAssociationEntersIt(): void
+    {
+        $tables = $this->everyProductionTable();
+        $people = ScopedTableAudit::load([PeopleTable::class], $this->getTableLocator())[0];
+
+        $this->assertContains(PeopleTable::class, ScopedTableAudit::discover(support: false));
+        $this->assertTrue(ScopedTableAudit::isScoped($people));
+        $this->assertSame(
+            ['person_developments', 'person_id'],
+            [
+                $people->getBehavior('DevelopmentScoped')->getConfig('through'),
+                $people->getBehavior('DevelopmentScoped')->getConfig('throughKey'),
+            ],
+        );
+        $this->assertContains('people', ScopedTableAudit::scopedTableNames($tables));
+        $this->assertSame([], ScopedTableAudit::missingBulkGuard([$people]));
         $this->assertSame([], ScopedTableAudit::associationProblems($tables, []));
     }
 

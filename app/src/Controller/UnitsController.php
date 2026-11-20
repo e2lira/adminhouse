@@ -28,6 +28,8 @@ use Cake\ORM\Table;
  */
 class UnitsController extends AppController
 {
+    use ResolvesDevelopmentTrait;
+
     private const TYPES = ['apartment' => 'Departamento', 'house' => 'Casa', 'lot' => 'Lote'];
     private const PAGE_SIZE = 100;
     private const DUPLICATE = 'Ya existe una unidad con ese valor de «{number}» para el mismo valor de '
@@ -282,27 +284,6 @@ class UnitsController extends AppController
         $this->Authorization->authorize($this->Units, 'add');
 
         return $this->developmentUnder($developmentId, DevelopmentPolicy::UNITS_MANAGE);
-    }
-
-    /**
-     * @param string|int $developmentId Development id from the URL.
-     * @param string $permission Permission the action needs.
-     * @return \App\Model\Entity\Development Only what the screens show (never the bank or contact fields).
-     */
-    private function developmentUnder(int|string $developmentId, string $permission): Development
-    {
-        $id = $this->DevelopmentScope->development($developmentId, $permission);
-        /** @var \App\Model\Entity\Development */
-        return $this->fetchTable('Developments')
-            ->find('all', developmentScope: $this->DevelopmentScope->for($permission))
-            ->select([
-                'Developments.id',
-                'Developments.name',
-                'Developments.section_label',
-                'Developments.number_label',
-            ])
-            ->where(['Developments.id' => $id])
-            ->firstOrFail();
     }
 
     /**

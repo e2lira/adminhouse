@@ -10,7 +10,7 @@ use Cake\ORM\Table;
 /**
  * Test-only table scoped through a link table (`scoped_person_links`), standing in for people.
  */
-class PeopleTable extends Table
+class ScopedPeopleTable extends Table
 {
     use ScopedBulkOperationsTrait;
     use ScopedOperationTrait;

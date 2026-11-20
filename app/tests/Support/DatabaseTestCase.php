@@ -193,6 +193,28 @@ abstract class DatabaseTestCase extends TestCase
         return $id;
     }
 
+    /**
+     * @param string $name Person name.
+     * @param list<int> $developmentIds Developments the person is linked to.
+     * @return int Person id.
+     */
+    protected function createPerson(string $name, array $developmentIds): int
+    {
+        $this->db()->execute(
+            'INSERT INTO people (name, created, modified) VALUES (?, NOW(), NOW())',
+            [$name],
+        );
+        $id = (int)$this->db()->execute('SELECT id FROM people WHERE name = ?', [$name])->fetch()[0];
+        foreach ($developmentIds as $developmentId) {
+            $this->db()->execute(
+                'INSERT INTO person_developments (person_id, development_id) VALUES (?, ?)',
+                [$id, $developmentId],
+            );
+        }
+
+        return $id;
+    }
+
     protected function createDevelopment(string $name = 'Residencial Demo'): int
     {
         $this->db()->execute(

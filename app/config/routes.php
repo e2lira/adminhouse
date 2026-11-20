@@ -114,6 +114,22 @@ return function (RouteBuilder $routes): void {
             $unit,
         );
 
+        // People: list, add and edit. There is deliberately no delete route and no route to link an existing person to
+        // a development (AD10): shared people come from the migration stage.
+        $people = '/developments/{developmentId}/people';
+        $person = $inDevelopment + ['pass' => ['developmentId', 'id']];
+        $builder->connect($people, ['controller' => 'People', 'action' => 'index', '_method' => 'GET'], $development);
+        $builder->connect(
+            $people . '/add',
+            ['controller' => 'People', 'action' => 'add', '_method' => ['GET', 'POST']],
+            $development,
+        );
+        $builder->connect(
+            $people . '/{id}/edit',
+            ['controller' => 'People', 'action' => 'edit', '_method' => ['GET', 'POST']],
+            $person,
+        );
+
         $assignments = '/developments/{developmentId}/role-assignments';
         $constraints = ['developmentId' => '[0-9]+', 'assignmentId' => '[0-9]+'];
         $builder->connect(
