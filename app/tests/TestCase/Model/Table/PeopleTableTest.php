@@ -5,6 +5,7 @@ namespace App\Test\TestCase\Model\Table;
 
 use App\Authorization\AccessControl;
 use App\Authorization\DevelopmentScope;
+use App\Authorization\DevelopmentScopeStack;
 use App\Model\Entity\Person;
 use App\Model\Exception\DevelopmentScopeViolation;
 use App\Model\Exception\MissingDevelopmentScopeException;
@@ -99,21 +100,37 @@ class PeopleTableTest extends DatabaseTestCase
         $this->people->find()->all();
     }
 
-    public function testAScopeNarrowsTheListToThePeopleLinkedToItsDevelopments(): void
+    /**
+     * @return array<string, array{list<string>, list<string>}> Developments of the scope (A, B) and who it finds.
+     */
+    public static function scopes(): array
+    {
+        return [
+            'A' => [['A'], ['Both', 'Only A']],
+            'B' => [['B'], ['Both', 'Only B']],
+            'A and B: the shared person once' => [['A', 'B'], ['Both', 'Only A', 'Only B']],
+            'neither' => [[], []],
+        ];
+    }
+
+    /**
+     * @param list<string> $letters Developments of the scope.
+     * @param list<string> $expected Names found, ordered.
+     */
+    #[DataProvider('scopes')]
+    public function testAScopeNarrowsTheListToThePeopleLinkedToItsDevelopments(array $letters, array $expected): void
     {
         $this->createPerson('Only A', [$this->devA]);
         $this->createPerson('Only B', [$this->devB]);
         $this->createPerson('Both', [$this->devA, $this->devB]);
         $this->createPerson('Nowhere', []);
         $this->actAsSuperAdministrator();
+        $ids = array_map(fn(string $letter): int => $letter === 'A' ? $this->devA : $this->devB, $letters);
 
-        $inA = $this->people->find('all', developmentScope: DevelopmentScope::only([$this->devA]))
-            ->orderBy(['People.name' => 'ASC'])->all()->extract('name')->toList();
-        $inB = $this->people->find('all', developmentScope: DevelopmentScope::only([$this->devB]))
+        $names = $this->people->find('all', developmentScope: DevelopmentScope::only($ids))
             ->orderBy(['People.name' => 'ASC'])->all()->extract('name')->toList();
 
-        $this->assertSame(['Both', 'Only A'], $inA);
-        $this->assertSame(['Both', 'Only B'], $inB);
+        $this->assertSame($expected, $names);
     }
 
     public function testAnEmptyScopeFindsNobodyAndTheFullScopeFindsEveryone(): void
@@ -317,13 +334,19 @@ class PeopleTableTest extends DatabaseTestCase
     public function testCreateForRefusesAnArchivedDevelopment(): void
     {
         $scope = $this->actAsRole('administrator');
-        $this->endSession();
+        // Control: the same call succeeds before the archive, so the refusal below is the archive's doing.
+        $this->people->createFor($this->devA, ['name' => 'Antes'], $scope);
         $this->db()->execute('UPDATE developments SET archived_at = NOW() WHERE id = ?', [$this->devA]);
-        $this->actAs((int)$this->db()->execute("SELECT id FROM users WHERE username = 'ann'")->fetch()[0]);
 
-        $this->expectException(DevelopmentScopeViolation::class);
-
-        $this->people->createFor($this->devA, ['name' => 'Ana'], $scope);
+        try {
+            $this->people->createFor($this->devA, ['name' => 'Despues'], $scope);
+            $this->fail('An archived development must refuse the creation.');
+        } catch (DevelopmentScopeViolation) {
+            // Expected.
+        }
+        $this->commitSession();
+        $this->assertSame(1, $this->peopleCount());
+        $this->assertSame(0, (int)$this->db()->execute("SELECT COUNT(*) FROM people WHERE name = 'Despues'")->fetch()[0]);
     }
 
     // --- writes: read first (task 11.8) -----------------------------------------------------------------------------
@@ -458,5 +481,179 @@ class PeopleTableTest extends DatabaseTestCase
         }
         $this->commitSession();
         $this->assertSame('Shared', $this->personRow($id)['name'] ?? null);
+    }
+
+    // --- review round 1 -----------------------------------------------------------------------------------------------
+
+    /**
+     * Intended (spec "Editing people": the person themself): the own-row branch of the update policy does not look at
+     * the other links, so a user may edit their own person even when it is shared with a development they do not
+     * manage. The layer-1 read still has to reach the person.
+     */
+    public function testAUserMayEditTheirOwnSharedPerson(): void
+    {
+        $id = $this->createPerson('Shared', [$this->devA, $this->devB]);
+        $scope = $this->actAsRole('data_entry');
+        $this->endSession();
+        $this->db()->execute("UPDATE users SET person_id = ? WHERE username = 'ann'", [$id]);
+        $this->actAs((int)$this->db()->execute("SELECT id FROM users WHERE username = 'ann'")->fetch()[0]);
+        $person = $this->readIn($id, $scope);
+        $person->set('phone', '555 0100');
+
+        $this->people->save($person, ['developmentScope' => $scope]);
+        $this->commitSession();
+
+        $this->assertSame('555 0100', $this->personRow($id)['phone'] ?? null);
+    }
+
+    /**
+     * Intended (AD7: the super-administrator is not narrowed by the archive state): editing a person linked to an
+     * archived development is refused to every editor and allowed to the super-administrator.
+     */
+    public function testTheSuperAdministratorEditsAPersonLinkedToAnArchivedDevelopment(): void
+    {
+        $archived = $this->createDevelopment('Archivo');
+        $id = $this->createPerson('Shared', [$this->devA, $archived]);
+        $this->db()->execute('UPDATE developments SET archived_at = NOW() WHERE id = ?', [$archived]);
+        $this->actAsSuperAdministrator();
+        $scope = DevelopmentScope::all();
+        $person = $this->readIn($id, $scope);
+        $person->set('name', 'Edited');
+
+        $this->people->save($person, ['developmentScope' => $scope]);
+        $this->commitSession();
+
+        $this->assertSame('Edited', $this->personRow($id)['name'] ?? null);
+    }
+
+    public function testAPersonIsNeverDeletedThroughTheTable(): void
+    {
+        $id = $this->createPerson('Ana', [$this->devA]);
+        $this->actAsSuperAdministrator();
+        $scope = DevelopmentScope::all();
+        $person = $this->readIn($id, $scope);
+
+        try {
+            $this->people->delete($person, ['developmentScope' => $scope]);
+            $this->fail('Nobody deletes a person through the application.');
+        } catch (LogicException) {
+            // Expected.
+        }
+        $this->commitSession();
+        $this->assertNotNull($this->personRow($id));
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function controlCharacters(): array
+    {
+        $cases = [];
+        foreach (['name', 'email', 'phone', 'rfc'] as $field) {
+            $cases[$field . ': NUL'] = [$field, "ab\0cd"];
+            $cases[$field . ': bell'] = [$field, "ab\x07cd"];
+            $cases[$field . ': newline'] = [$field, "ab\ncd"];
+            $cases[$field . ': invalid UTF-8'] = [$field, "ab\xC3\x28cd"];
+        }
+
+        return $cases;
+    }
+
+    #[DataProvider('controlCharacters')]
+    public function testControlCharactersAreFieldErrorsOnCreateAndNeverReachTheDatabase(string $field, string $value): void
+    {
+        $scope = $this->actAsRole('administrator');
+
+        $person = $this->people->createFor($this->devA, ['name' => 'Ana', $field => $value], $scope);
+        $this->commitSession();
+
+        $this->assertSame([$field], array_keys($person->getErrors()));
+        $this->assertSame(0, $this->peopleCount());
+    }
+
+    #[DataProvider('controlCharacters')]
+    public function testControlCharactersAreFieldErrorsOnEditAndTheRowIsKept(string $field, string $value): void
+    {
+        $id = $this->createPerson('Ana', [$this->devA]);
+        $scope = $this->actAsRole('administrator');
+        $person = $this->readIn($id, $scope);
+
+        $this->people->patchEntity($person, [$field => $value]);
+        $saved = $this->people->save($person, ['developmentScope' => $scope]);
+        $this->commitSession();
+
+        $this->assertFalse($saved);
+        $this->assertSame([$field], array_keys($person->getErrors()));
+        $this->assertSame('Ana', $this->personRow($id)['name'] ?? null);
+    }
+
+    /**
+     * A well-formed address of 255 characters (local part and labels within their limits) fails only the length rule.
+     */
+    public function testAValidEmailOf255CharactersFailsOnlyTheLengthRule(): void
+    {
+        $scope = $this->actAsRole('administrator');
+        $email = str_repeat('a', 50) . '@' . str_repeat(str_repeat('b', 60) . '.', 3) . str_repeat('c', 21);
+        $this->assertSame(255, strlen($email));
+
+        $person = $this->people->createFor($this->devA, ['name' => 'Ana', 'email' => $email], $scope);
+
+        $this->assertSame(['email'], array_keys($person->getErrors()));
+        $this->assertSame(['maxLength'], array_keys($person->getError('email')));
+    }
+
+    public function testValuesAtTheLimitsAreAccepted(): void
+    {
+        $scope = $this->actAsRole('administrator');
+        $email = str_repeat('a', 50) . '@' . str_repeat(str_repeat('b', 60) . '.', 3) . str_repeat('c', 20);
+        $this->assertSame(254, strlen($email));
+        $data = [
+            'name' => str_repeat('n', 150), 'email' => $email, 'phone' => str_repeat('1', 30),
+            'rfc' => str_repeat('a', 13),
+        ];
+
+        $person = $this->people->createFor($this->devA, $data, $scope);
+        $this->commitSession();
+
+        $this->assertSame([], $person->getErrors());
+        $this->assertSame(
+            [$data['name'], $email, $data['phone'], str_repeat('A', 13)],
+            array_values($this->personRow((int)$person->id) ?? []),
+        );
+    }
+
+    public function testANullNameIsRejected(): void
+    {
+        $scope = $this->actAsRole('administrator');
+
+        $person = $this->people->createFor($this->devA, ['name' => null], $scope);
+
+        $this->assertNotSame([], $person->getError('name'));
+        $this->assertTrue($person->isNew());
+    }
+
+    /**
+     * The save scope is the option narrowed by the scope that is already running: a person read under {A, B} cannot
+     * be saved inside an operation that only reaches B.
+     */
+    public function testARunningScopeNarrowsTheSaveScope(): void
+    {
+        $id = $this->createPerson('Ana', [$this->devA]);
+        $this->actAsSuperAdministrator();
+        $wide = DevelopmentScope::only([$this->devA, $this->devB]);
+        $person = $this->readIn($id, $wide);
+        $person->set('name', 'Moved');
+
+        try {
+            DevelopmentScopeStack::run(
+                DevelopmentScope::only([$this->devB]),
+                fn() => $this->people->save($person, ['developmentScope' => $wide]),
+            );
+            $this->fail('The running scope must narrow the save scope.');
+        } catch (DevelopmentScopeViolation) {
+            // Expected.
+        }
+        $this->commitSession();
+        $this->assertSame('Ana', $this->personRow($id)['name'] ?? null);
     }
 }

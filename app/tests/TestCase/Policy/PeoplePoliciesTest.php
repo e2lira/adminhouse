@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Test\TestCase\Policy;
 
 use App\Model\Entity\Person;
+use App\Policy\PeopleAccess;
 use App\Policy\PeopleTablePolicy;
 use App\Policy\PersonPolicy;
 use App\Test\Support\DatabaseTestCase;
@@ -13,6 +14,7 @@ use Authorization\AuthorizationServiceInterface;
 use Authorization\IdentityDecorator;
 use Authorization\IdentityInterface;
 use Authorization\Policy\OrmResolver;
+use Closure;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -232,5 +234,42 @@ class PeoplePoliciesTest extends DatabaseTestCase
         $names = (new PeopleTablePolicy())->scopeIndex($user, $query)->all()->extract('name')->toList();
 
         $this->assertSame(['mine'], $names);
+    }
+
+    /**
+     * @return array<string, array{\Closure(int): mixed, bool}> How the id of the development arrives, and whether it
+     *  counts. Every refused form would name the real development (id 1 after the tables are emptied, or the id in
+     *  the cases built from it) if PHP's type juggling were allowed to decide.
+     */
+    public static function developmentIds(): array
+    {
+        return [
+            'int' => [fn(int $id) => $id, true],
+            'canonical string' => [fn(int $id) => (string)$id, true],
+            'leading zero' => [fn(int $id) => '0' . $id, false],
+            'trailing text' => [fn(int $id) => $id . 'abc', false],
+            'leading space' => [fn(int $id) => ' ' . $id, false],
+            'zero string' => [fn(int $id) => '0', false],
+            'negative string' => [fn(int $id) => '-' . $id, false],
+            'negative int' => [fn(int $id) => -$id, false],
+            'float' => [fn(int $id) => (float)$id, false],
+            'true' => [fn(int $id) => true, false],
+            'null' => [fn(int $id) => null, false],
+            'overflowing string' => [fn(int $id) => '1' . str_repeat('0', 25), false],
+        ];
+    }
+
+    /**
+     * @param \Closure(int): mixed $form Builds the value from the real development id.
+     */
+    #[DataProvider('developmentIds')]
+    public function testOnlyACanonicalDevelopmentIdCountsForReadsAndWrites(Closure $form, bool $counts): void
+    {
+        $user = $this->userWith('super_administrator');
+        $access = new PeopleAccess();
+        $value = $form($this->development);
+
+        $this->assertSame($counts, $access->canView($user, $value), 'view');
+        $this->assertSame($counts, $access->canWrite($user, $value), 'write');
     }
 }

@@ -112,7 +112,7 @@ class PeopleTable extends Table
                 $data[$field] = $field === 'name' || $value !== '' ? $value : null;
             }
         }
-        if (isset($data['rfc']) && is_string($data['rfc'])) {
+        if (isset($data['rfc']) && is_string($data['rfc']) && mb_check_encoding($data['rfc'], 'UTF-8')) {
             $data['rfc'] = mb_strtoupper($data['rfc']);
         }
     }
@@ -134,7 +134,31 @@ class PeopleTable extends Table
         $validator->allowEmptyString('phone')->maxLength('phone', self::PHONE_MAX);
         $validator->allowEmptyString('rfc')->maxLength('rfc', self::RFC_MAX);
 
+        // Every field is one line of text: a control character (NUL, bell, a line break) or bytes that are not UTF-8
+        // would be an error from the database, not a field error.
+        foreach (['name', 'email', 'phone', 'rfc'] as $field) {
+            $validator->add($field, 'noControl', [
+                'rule' => fn(mixed $value): bool => !is_string($value)
+                    || (mb_check_encoding($value, 'UTF-8') && preg_match('/\p{Cc}/u', $value) !== 1),
+                'message' => 'The value contains characters that are not allowed.',
+            ]);
+        }
+
         return $validator;
+    }
+
+    /**
+     * Nobody deletes a person through the application (the database grants it to the super-administrator only, for
+     * maintenance, and no route reaches it).
+     *
+     * @param \Cake\Datasource\EntityInterface $entity Person.
+     * @param array<string, mixed> $options Delete options.
+     * @return bool
+     * @throws \LogicException Always.
+     */
+    public function delete(EntityInterface $entity, array $options = []): bool
+    {
+        throw new LogicException('People are never deleted through the application.');
     }
 
     /**
@@ -177,6 +201,8 @@ class PeopleTable extends Table
             throw $e;
         }
 
+        // The read-back needs `people.view`: a holder of `people.manage` always holds it too (the seeds are pinned
+        // together by the `managedWritePairs` gate in AccessControlTest), and the creation is rolled back otherwise.
         /** @var \App\Model\Entity\Person */
         return $this->find('all', developmentScope: $scope)->where(['People.id' => $id])->first()
             ?? throw new DevelopmentScopeViolation();
