@@ -231,6 +231,29 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         return ['tables' => $tables, 'policies' => $policies, 'triggers' => $triggers];
     }
 
+    /**
+     * @return array{tables: list<string>, policies: list<string>, triggers: list<string>, functions: int, constraints: list<string>}
+     *   What the occupancies migration owns: the table, its policies, triggers, constraints and trigger function.
+     */
+    private function occupancies(): array
+    {
+        $names = fn(string $sql): array => array_map(static fn(array $row): string => $row[0], $this->db()->execute($sql)->fetchAll());
+
+        return [
+            'tables' => $names("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = 'occupancies'"),
+            'policies' => $names("SELECT policyname FROM pg_policies WHERE tablename = 'occupancies' ORDER BY policyname"),
+            'triggers' => $names(
+                "SELECT tgname FROM pg_trigger WHERE tgrelid = to_regclass('public.occupancies') AND NOT tgisinternal ORDER BY tgname",
+            ),
+            'functions' => (int)$this->db()->execute(
+                "SELECT COUNT(*) FROM pg_proc WHERE proname = 'occupancies_guard_update' AND pronamespace = 'public'::regnamespace",
+            )->fetch()[0],
+            'constraints' => $names(
+                "SELECT conname FROM pg_constraint WHERE conrelid = to_regclass('public.occupancies') AND contype <> 'n' ORDER BY conname",
+            ),
+        ];
+    }
+
     public function testRollingBackRestoresTheMatrixTheThreeMigrationsFoundAndForwardRestoresTheirs(): void
     {
         $migrations = new Migrations(['connection' => 'test_migrations']);
@@ -241,6 +264,26 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         $sectionsAndUnitsAfterUp = $this->sectionsAndUnits();
         $this->assertSame(['tables' => ['sections', 'units'], 'policies' => 8, 'triggers' => 2], $sectionsAndUnitsAfterUp);
         $this->assertTrue($this->functionExists());
+        // The occupancies migration (5a): table, four policies, two triggers, its trigger function and constraints.
+        $occupanciesAfterUp = $this->occupancies();
+        $this->assertSame(['occupancies'], $occupanciesAfterUp['tables']);
+        $this->assertCount(4, $occupanciesAfterUp['policies']);
+        $this->assertSame(['occupancies_forbid_development_change', 'occupancies_guard_update'], $occupanciesAfterUp['triggers']);
+        $this->assertSame(1, $occupanciesAfterUp['functions']);
+        // PostgreSQL 18 also lists NOT NULL constraints; the named ones are what the migration declares.
+        $this->assertSame([
+            'occupancies_development_id_fkey',
+            'occupancies_no_overlap_per_person',
+            'occupancies_one_primary_per_role',
+            'occupancies_period_check',
+            'occupancies_person_development_fkey',
+            'occupancies_pkey',
+            'occupancies_role_check',
+            'occupancies_unit_fkey',
+        ], $occupanciesAfterUp['constraints']);
+        $this->assertContains('administrator:occupancies.manage', $matrixAfterUp);
+        $this->assertContains('data_entry:occupancies.manage', $matrixAfterUp);
+        $this->assertContains('occupancies.manage', $codesAfterUp);
         $this->assertContains('administrator:units.manage', $matrixAfterUp);
         $this->assertContains('data_entry:units.manage', $matrixAfterUp);
         $this->assertNotContains('resident:units.view', $matrixAfterUp);
@@ -259,6 +302,7 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         $expectedAfterDown = array_values(array_filter(
             $matrixAfterUp,
             static fn(string $pair): bool => !str_ends_with($pair, ':units.manage')
+                && !str_ends_with($pair, ':occupancies.manage')
                 && !str_contains($pair, ':people.'),
         ));
         $expectedAfterDown[] = 'resident:units.view';
@@ -269,12 +313,18 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
             $this->assertTrue($migrations->rollback(['target' => self::BEFORE_THE_THREE]));
 
             $this->assertFalse($this->functionExists());
+            // Occupancies, with everything that came with them, are gone; the btree_gist extension stays.
+            $this->assertSame(1, (int)$this->db()->execute("SELECT COUNT(*) FROM pg_extension WHERE extname = 'btree_gist'")->fetch()[0]);
+            $this->assertSame(
+                ['tables' => [], 'policies' => [], 'triggers' => [], 'functions' => 0, 'constraints' => []],
+                $this->occupancies(),
+            );
             // Sections and units, with their policies and triggers, are gone.
             $this->assertSame(['tables' => [], 'policies' => 0, 'triggers' => 0], $this->sectionsAndUnits());
             // Only the rows the migrations own changed: units.manage went away, one resident row came back.
             $this->assertSame($expectedAfterDown, $this->matrix());
             $this->assertSame(
-                array_values(array_diff($codesAfterUp, ['units.manage', 'people.view', 'people.manage'])),
+                array_values(array_diff($codesAfterUp, ['units.manage', 'people.view', 'people.manage', 'occupancies.manage'])),
                 $this->codes(),
             );
             // The people migration restored exactly what the original migrations left: definition, owner, config and
@@ -304,6 +354,7 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
 
         $this->assertTrue($this->functionExists());
         $this->assertSame($sectionsAndUnitsAfterUp, $this->sectionsAndUnits());
+        $this->assertSame($occupanciesAfterUp, $this->occupancies());
         $this->assertSame($peopleAfterUp, $this->peopleAccess());
         $this->assertSame($this->expectedReadPolicies(), $this->readPolicies());
         $this->assertSame(self::POLICY_NAMES, $this->policyNames());

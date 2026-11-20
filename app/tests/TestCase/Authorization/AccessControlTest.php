@@ -151,14 +151,15 @@ class AccessControlTest extends DatabaseTestCase
     {
         return [
             'administrator' => ['administrator', [
-                'developments.view', 'payments.create', 'people.manage', 'people.view', 'reports.view',
-                'role_assignments.manage', 'units.manage', 'units.view',
+                'developments.view', 'occupancies.manage', 'payments.create', 'people.manage', 'people.view',
+                'reports.view', 'role_assignments.manage', 'units.manage', 'units.view',
             ]],
             'accountant' => ['accountant', [
                 'developments.view', 'payments.create', 'people.view', 'reports.view', 'units.view',
             ]],
             'data_entry' => ['data_entry', [
-                'developments.view', 'payments.create', 'people.manage', 'people.view', 'units.manage', 'units.view',
+                'developments.view', 'occupancies.manage', 'payments.create', 'people.manage', 'people.view',
+                'units.manage', 'units.view',
             ]],
             'supervisor' => ['supervisor', ['developments.view', 'people.view', 'reports.view', 'units.view']],
             'guard' => ['guard', ['gate.log']],
@@ -229,6 +230,9 @@ class AccessControlTest extends DatabaseTestCase
             'units' => ['units.manage', 'units.view'],
             // People are not a managed domain table, but editing one reads it first (the UPDATE policy's WHERE).
             'people' => ['people.manage', 'people.view'],
+            // A5: occupancies are read through people.view (they say who lives in which unit), written through
+            // occupancies.manage, so every role that writes them must also read people.
+            'occupancies' => ['occupancies.manage', 'people.view'],
         ];
     }
 
@@ -254,6 +258,40 @@ class AccessControlTest extends DatabaseTestCase
         $writers = $holders($write);
         $this->assertNotSame([], $writers, 'No role holds ' . $write);
         $this->assertSame([], array_values(array_diff($writers, $holders($read))));
+    }
+
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function occupanciesManageByRole(): array
+    {
+        return [
+            'administrator' => ['administrator', true],
+            'data_entry' => ['data_entry', true],
+            'accountant' => ['accountant', false],
+            'supervisor' => ['supervisor', false],
+            'guard' => ['guard', false],
+            'resident' => ['resident', false],
+        ];
+    }
+
+    /**
+     * @param string $role Role code.
+     * @param bool $holds Whether the role may manage occupancies.
+     * @return void
+     */
+    #[DataProvider('occupanciesManageByRole')]
+    public function testOccupanciesManageIsHeldByAdministratorAndDataEntryOnly(string $role, bool $holds): void
+    {
+        $dev = $this->createDevelopment('A');
+        $other = $this->createDevelopment('B');
+        $user = $this->createUser('u_' . $role);
+        $this->assignRole($user, $role, $dev);
+
+        $scope = $this->access->allowedFor($user, 'occupancies.manage');
+
+        $this->assertSame($holds ? [$dev] : [], $scope->ids());
+        $this->assertFalse($scope->allows($other));
     }
 
     /**
