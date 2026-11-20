@@ -8,8 +8,8 @@ use App\Database\RowLevelSecurity;
 use App\Test\Support\Scoped\HoldersTable;
 use App\Test\Support\Scoped\ItemsTable;
 use App\Test\Support\Scoped\NotesTable;
-use App\Test\Support\Scoped\PeopleTable;
 use App\Test\Support\Scoped\RealmsTable;
+use App\Test\Support\Scoped\ScopedPeopleTable;
 use App\Test\Support\Scoped\ScopedSchema;
 
 /**
@@ -26,7 +26,7 @@ abstract class ScopedTableTestCase extends DatabaseTestCase
 
     protected NotesTable $notes;
 
-    protected PeopleTable $people;
+    protected ScopedPeopleTable $people;
 
     protected RealmsTable $realms;
 
@@ -68,7 +68,7 @@ abstract class ScopedTableTestCase extends DatabaseTestCase
         $locator = $this->getTableLocator();
         $this->items = $locator->get('ScopedItems', ['className' => ItemsTable::class]);
         $this->notes = $locator->get('ScopedNotes', ['className' => NotesTable::class]);
-        $this->people = $locator->get('ScopedPeople', ['className' => PeopleTable::class]);
+        $this->people = $locator->get('ScopedPeople', ['className' => ScopedPeopleTable::class]);
         $this->realms = $locator->get('ScopedRealms', ['className' => RealmsTable::class]);
         $this->holders = $locator->get('ScopedHolders', ['className' => HoldersTable::class]);
     }
