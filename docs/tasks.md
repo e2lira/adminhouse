@@ -254,3 +254,4 @@
 | DU-4B-II | developments-units PR 4b-ii: `PeopleController`, people templates and routes, default-deny walks (tasks 11.5 to 11.8). | DONE (pending review) | build | Claude | 2026-11-19 |
 
 | DU-4B-II-R1 | developments-units PR 4b-ii review round 1: edit scope proven, paging and sort contract, edit validation cases, Spanish control-character copy, design A4. | DONE (pending review) | build | Claude | 2026-11-20 |
+| DU-5A | developments-units PR 5a: occupancies table with exclusion constraints and end-once trigger, `btree_gist` provisioning and guard, `occupancies.manage`, RLS on `people.view` (design A5; tasks 12.1 to 12.8). | DONE (pending review) | build | Claude | 2026-11-20 |
