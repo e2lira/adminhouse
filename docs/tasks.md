@@ -238,3 +238,5 @@
 | DU-3B-II | developments-units PR 3b-ii: units and sections UI (`UnitsController`, templates with the development labels, explicit routes, default-deny walk), field errors in Spanish, constraint-violation attribution under row-level security (tasks 9.1 to 9.5). | DONE (pending review) | build | Claude | 2026-11-19 |
 
 | DU-3B-II-R1 | developments-units PR 3b-ii review round 1: `is_active` out of mass assignment, strict constraint-name parsing, catalog-lookup tests, field errors with the development labels, same-user-both-developments 404 and foreign-section tests, method walk, reactivation refusals, race and boundary tests. | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-4A | developments-units PR 4a: people database layer (`person_in_permission_scope`, `person_create` on `people.manage`, people UPDATE policy, `people.view` and `people.manage` seeds, ADR-0005 notes; tasks 10.1 to 10.8). | DONE (pending review) | build | Claude | 2026-11-19 |
