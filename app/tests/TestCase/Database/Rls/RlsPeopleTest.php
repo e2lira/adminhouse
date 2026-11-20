@@ -530,7 +530,7 @@ class RlsPeopleTest extends RlsTestCase
     }
 
     /**
-     * Roles that read the person (they hold an assignment in A) but may not change it.
+     * Roles that read the person (they hold `people.view` in A) but may not change it.
      *
      * @return array<string, array{string}>
      */
@@ -540,7 +540,6 @@ class RlsPeopleTest extends RlsTestCase
             'accountantA' => ['accountantA'],
             'supervisorA' => ['supervisorA'],
             'readOnlyA' => ['readOnlyA'],
-            'guardA' => ['guardA'],
         ];
     }
 
@@ -569,6 +568,8 @@ class RlsPeopleTest extends RlsTestCase
             'endedAdmin' => ['endedAdmin'],
             'futureAdmin' => ['futureAdmin'],
             'adminB' => ['adminB'],
+            // people.view is the read code (A2): a guard holds no such code, and the guard has no person of its own
+            'guardA' => ['guardA'],
         ];
     }
 
@@ -627,7 +628,8 @@ class RlsPeopleTest extends RlsTestCase
         $this->actAs($this->resident);
 
         $this->assertAllowed('UPDATE people SET phone = ? WHERE id = ?', ['5560', $this->personResident]);
-        $this->assertSame([$this->personA], $this->ids('SELECT id FROM people WHERE id = ?', [$this->personA]));
+        // A resident holds no people.view (A2): the others of the development are not even visible.
+        $this->assertSame([], $this->ids('SELECT id FROM people WHERE id = ?', [$this->personA]));
         $this->assertNoRows('UPDATE people SET phone = ? WHERE id = ?', ['5560', $this->personA]);
         $this->commitSession();
 
