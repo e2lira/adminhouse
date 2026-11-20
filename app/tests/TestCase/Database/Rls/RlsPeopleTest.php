@@ -23,6 +23,8 @@ class RlsPeopleTest extends RlsTestCase
 {
     private const DENIED = '42501';
 
+    private const REFUSAL = 'Not allowed to create people in this development';
+
     private int $devC;
 
     private int $supervisorA;
@@ -108,6 +110,29 @@ class RlsPeopleTest extends RlsTestCase
         }
     }
 
+    /**
+     * The statement must match no row (not be rejected): an UPDATE the policy filters out.
+     *
+     * @param string $sql Statement.
+     * @param list<mixed> $params Positional parameters.
+     * @return void
+     */
+    private function assertNoRows(string $sql, array $params = []): void
+    {
+        $this->assertSame(0, $this->attempt($sql, $params), 'Expected the statement to match no row: ' . $sql);
+    }
+
+    /**
+     * @param array{string, string}|null $failure SQLSTATE and message of a `person_create` call.
+     * @return void
+     */
+    private function assertRefusal(?array $failure): void
+    {
+        $this->assertNotNull($failure);
+        $this->assertSame(self::DENIED, $failure[0]);
+        $this->assertStringContainsString(self::REFUSAL, $failure[1]);
+    }
+
     private function create(int $developmentId, string $name = 'Created'): ?array
     {
         return $this->failureOf(
@@ -187,10 +212,7 @@ class RlsPeopleTest extends RlsTestCase
         $before = $this->peopleCount();
         $this->actAs($this->{$actor});
 
-        $failure = $this->create($this->devA);
-
-        $this->assertNotNull($failure);
-        $this->assertSame(self::DENIED, $failure[0]);
+        $this->assertRefusal($this->create($this->devA));
         $this->commitSession();
         $this->assertSame($before, $this->peopleCount());
         $this->assertSame(0, (int)$this->db()->execute(
@@ -201,11 +223,11 @@ class RlsPeopleTest extends RlsTestCase
     public function testNoSessionAndAJobAreRefused(): void
     {
         $this->actAs(null);
-        $this->assertSame(self::DENIED, $this->create($this->devA)[0] ?? null);
+        $this->assertRefusal($this->create($this->devA));
         $this->endSession();
 
         $this->actAsJob([$this->devA]);
-        $this->assertSame(self::DENIED, $this->create($this->devA)[0] ?? null);
+        $this->assertRefusal($this->create($this->devA));
         $this->commitSession();
 
         $this->assertSame(0, (int)$this->db()->execute(
@@ -221,13 +243,55 @@ class RlsPeopleTest extends RlsTestCase
         $missing = $this->create(999999999);
         $unset = $this->failureOf("SELECT person_create(NULL, 'Created', NULL, NULL, NULL)");
 
-        $this->assertNotNull($foreign);
-        $this->assertSame(self::DENIED, $foreign[0]);
+        $this->assertRefusal($foreign);
         $this->assertSame($missing, $foreign);
         $this->assertSame($unset, $foreign);
         $this->commitSession();
         $this->assertSame(0, (int)$this->db()->execute(
             "SELECT COUNT(*) FROM people WHERE name = 'Created'",
+        )->fetch()[0]);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function foreignCreations(): array
+    {
+        return [
+            'dataEntryA for B' => ['dataEntryA', 'devB'],
+            'adminB for A' => ['adminB', 'devA'],
+        ];
+    }
+
+    #[DataProvider('foreignCreations')]
+    public function testEditorsOfOneDevelopmentAreRefusedForAnotherWithTheSameErrorAsForAMissingOne(
+        string $actor,
+        string $development,
+    ): void {
+        $before = $this->peopleCount();
+        $this->actAs($this->{$actor});
+
+        $foreign = $this->create($this->{$development});
+        $missing = $this->create(999999999);
+
+        $this->assertRefusal($foreign);
+        $this->assertSame($missing, $foreign);
+        $this->commitSession();
+        $this->assertSame($before, $this->peopleCount());
+    }
+
+    public function testTheSuperAdministratorStillCreatesInAnArchivedDevelopment(): void
+    {
+        // The spec is silent: AD7 leaves the super-administrator out of the archive narrowing in layer 2 and layer 1
+        // (DevelopmentPolicy::canManagePeople) refuses the write. This pins the database behavior as it is today.
+        $this->archiveC();
+        $this->actAs($this->superUser);
+
+        $this->assertNull($this->create($this->devC, 'In archived'));
+        $this->commitSession();
+
+        $this->assertSame(1, (int)$this->db()->execute(
+            "SELECT COUNT(*) FROM people WHERE name = 'In archived'",
         )->fetch()[0]);
     }
 
@@ -242,8 +306,7 @@ class RlsPeopleTest extends RlsTestCase
         $failure = $this->create($this->devC, 'After archive');
         $this->commitSession();
 
-        $this->assertNotNull($failure);
-        $this->assertSame(self::DENIED, $failure[0]);
+        $this->assertRefusal($failure);
         $this->assertSame(
             ['Before archive'],
             array_column($this->db()->execute(
@@ -265,12 +328,39 @@ class RlsPeopleTest extends RlsTestCase
         $this->assertSame($before, $this->peopleCount());
     }
 
+    public function testAPersonIsNotLeftBehindWhenTheLinkFails(): void
+    {
+        // The super-administrator passes the permission check, so the person INSERT succeeds and the link INSERT
+        // fails on the foreign key (23503): the function must leave neither row. The count is read inside the same
+        // session after the failure (so it also sees any row the function itself left) and again as the owner.
+        $before = $this->peopleCount();
+        $orphans = 'SELECT COUNT(*) FROM people p WHERE NOT EXISTS (SELECT 1 FROM person_developments pd WHERE pd.person_id = p.id)';
+        $orphansBefore = (int)$this->db()->execute($orphans)->fetch()[0];
+        $this->actAs($this->superUser);
+
+        $failure = $this->create(999999999, 'Half done');
+
+        $this->assertNotNull($failure);
+        $this->assertSame('23503', $failure[0]);
+        $this->assertSame($before, (int)$this->appDb()->execute('SELECT COUNT(*) FROM people')->fetch()[0]);
+        $this->commitSession();
+        $this->assertSame($before, $this->peopleCount());
+        $this->assertSame(0, (int)$this->db()->execute(
+            "SELECT COUNT(*) FROM people WHERE name = 'Half done'",
+        )->fetch()[0]);
+        $this->assertSame($orphansBefore, (int)$this->db()->execute($orphans)->fetch()[0]);
+    }
+
     public function testNoOneInsertsIntoPeopleDirectly(): void
     {
         $before = $this->peopleCount();
         foreach (['adminA', 'dataEntryA', 'superUser'] as $actor) {
             $this->actAs($this->{$actor});
-            $this->assertRejected("INSERT INTO people (name, created, modified) VALUES ('Direct', NOW(), NOW())");
+            $this->assertSame(
+                self::DENIED,
+                $this->sqlStateOf("INSERT INTO people (name, created, modified) VALUES ('Direct', NOW(), NOW())"),
+                $actor,
+            );
             $this->commitSession();
         }
 
@@ -413,7 +503,11 @@ class RlsPeopleTest extends RlsTestCase
     {
         $this->actAs($this->{$actor});
 
-        $this->assertDenied('UPDATE people SET phone = ? WHERE id = ?', ['5552', $this->personShared]);
+        $this->assertSame(
+            [$this->personShared],
+            $this->ids('SELECT id FROM people WHERE id = ?', [$this->personShared]),
+        );
+        $this->assertNoRows('UPDATE people SET phone = ? WHERE id = ?', ['5552', $this->personShared]);
         $this->commitSession();
 
         $this->assertNull($this->phoneOf($this->personShared));
@@ -428,58 +522,91 @@ class RlsPeopleTest extends RlsTestCase
 
         $this->archiveC();
         $this->actAs($this->adminAC);
-        $this->assertDenied('UPDATE people SET phone = ? WHERE id = ?', ['5554', $this->personAC]);
+        $this->assertSame([$this->personAC], $this->ids('SELECT id FROM people WHERE id = ?', [$this->personAC]));
+        $this->assertNoRows('UPDATE people SET phone = ? WHERE id = ?', ['5554', $this->personAC]);
         $this->commitSession();
 
         $this->assertSame('5553', $this->phoneOf($this->personAC));
     }
 
     /**
+     * Roles that read the person (they hold an assignment in A) but may not change it.
+     *
      * @return array<string, array{string}>
      */
-    public static function refusedEditors(): array
+    public static function readersWhoCannotEdit(): array
     {
         return [
             'accountantA' => ['accountantA'],
             'supervisorA' => ['supervisorA'],
             'readOnlyA' => ['readOnlyA'],
             'guardA' => ['guardA'],
-            'disabledAdmin' => ['disabledAdmin'],
-            'endedAdmin' => ['endedAdmin'],
-            'futureAdmin' => ['futureAdmin'],
         ];
     }
 
-    #[DataProvider('refusedEditors')]
-    public function testEveryoneElseEditsNothing(string $actor): void
+    #[DataProvider('readersWhoCannotEdit')]
+    public function testRolesThatReadAPersonButDoNotManageItEditNothing(string $actor): void
     {
         $this->actAs($this->{$actor});
 
-        $this->assertDenied('UPDATE people SET phone = ? WHERE id = ?', ['5555', $this->personA]);
+        $this->assertSame([$this->personA], $this->ids('SELECT id FROM people WHERE id = ?', [$this->personA]));
+        $this->assertNoRows('UPDATE people SET phone = ? WHERE id = ?', ['5555', $this->personA]);
         $this->commitSession();
 
         $this->assertNull($this->phoneOf($this->personA));
     }
 
-    public function testAnEditorWithoutALinkToThePersonSeesAndChangesNothing(): void
+    /**
+     * Actors whose assignment is not active today or who belong to another development: the row is invisible to
+     * them, so the UPDATE finds nothing.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function actorsWhoCannotSeeThePerson(): array
     {
-        $this->actAs($this->adminB);
+        return [
+            'disabledAdmin' => ['disabledAdmin'],
+            'endedAdmin' => ['endedAdmin'],
+            'futureAdmin' => ['futureAdmin'],
+            'adminB' => ['adminB'],
+        ];
+    }
+
+    #[DataProvider('actorsWhoCannotSeeThePerson')]
+    public function testAnActorWhoCannotSeeAPersonChangesNothing(string $actor): void
+    {
+        $this->actAs($this->{$actor});
 
         $this->assertSame([], $this->ids('SELECT id FROM people WHERE id = ?', [$this->personA]));
-        $this->assertDenied('UPDATE people SET phone = ? WHERE id = ?', ['5556', $this->personA]);
+        $this->assertNoRows('UPDATE people SET phone = ? WHERE id = ?', ['5556', $this->personA]);
         $this->commitSession();
 
         $this->assertNull($this->phoneOf($this->personA));
     }
 
-    public function testAPersonWithoutLinksIsNotEditedByAnyAdministrator(): void
+    public function testAPersonWithoutLinksIsInvisibleToAdministratorsAndEditedOnlyBySuper(): void
     {
         $this->actAs($this->adminA);
+        $this->assertSame([], $this->ids('SELECT id FROM people WHERE id = ?', [$this->personNoLinks]));
+        $this->assertNoRows('UPDATE people SET phone = ? WHERE id = ?', ['5557', $this->personNoLinks]);
+        $this->commitSession();
+        $this->assertNull($this->phoneOf($this->personNoLinks));
 
-        $this->assertDenied('UPDATE people SET phone = ? WHERE id = ?', ['5557', $this->personNoLinks]);
+        $this->actAs($this->superUser);
+        $this->assertAllowed('UPDATE people SET phone = ? WHERE id = ?', ['5561', $this->personNoLinks]);
+        $this->commitSession();
+        $this->assertSame('5561', $this->phoneOf($this->personNoLinks));
+    }
+
+    public function testTheSuperAdministratorEditsAPersonLinkedToAnArchivedDevelopment(): void
+    {
+        $this->archiveC();
+        $this->actAs($this->superUser);
+
+        $this->assertAllowed('UPDATE people SET phone = ? WHERE id = ?', ['5562', $this->personAC]);
         $this->commitSession();
 
-        $this->assertNull($this->phoneOf($this->personNoLinks));
+        $this->assertSame('5562', $this->phoneOf($this->personAC));
     }
 
     public function testOnlyTheSuperAdministratorAndTheEditorOfEveryLinkChangeASharedPerson(): void
@@ -500,7 +627,8 @@ class RlsPeopleTest extends RlsTestCase
         $this->actAs($this->resident);
 
         $this->assertAllowed('UPDATE people SET phone = ? WHERE id = ?', ['5560', $this->personResident]);
-        $this->assertDenied('UPDATE people SET phone = ? WHERE id = ?', ['5560', $this->personA]);
+        $this->assertSame([$this->personA], $this->ids('SELECT id FROM people WHERE id = ?', [$this->personA]));
+        $this->assertNoRows('UPDATE people SET phone = ? WHERE id = ?', ['5560', $this->personA]);
         $this->commitSession();
 
         $this->assertSame('5560', $this->phoneOf($this->personResident));

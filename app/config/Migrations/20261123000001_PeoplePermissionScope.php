@@ -11,7 +11,7 @@ use Migrations\BaseMigration;
  * 1. seeds `people.view` (administrator, accountant, data_entry, supervisor; never resident, AD13) and
  *    `people.manage` (administrator, data_entry);
  * 2. adds `person_in_permission_scope(person, code)`: true only when the person has at least one development link and
- *    EVERY linked development is in `permission_dev_ids(code)`. For a write code an archived development drops out
+ *    EVERY linked development is in `permission_dev_ids(code)` (evaluated once per call, not once per link). For a write code an archived development drops out
  *    of that list, so a person shared with an archived development cannot be edited (S-3);
  * 3. replaces the body of `person_create` so it checks `permission_dev_ids('people.manage')` instead of
  *    `admin_dev_ids()`. The error is the same for a development the caller does not manage and one that does not
@@ -68,9 +68,10 @@ class PeoplePermissionScope extends BaseMigration
                        SELECT 1 FROM public.person_developments pd WHERE pd.person_id = p_person_id
                    )
                AND NOT EXISTS (
-                       SELECT 1 FROM public.person_developments pd
-                       WHERE pd.person_id = p_person_id
-                         AND NOT (pd.development_id = ANY (public.permission_dev_ids(p_code)))
+                       SELECT 1
+                       FROM (SELECT public.permission_dev_ids(p_code) AS ids) scope
+                       JOIN public.person_developments pd ON pd.person_id = p_person_id
+                       WHERE pd.development_id <> ALL (scope.ids)
                    )
         SQL);
 

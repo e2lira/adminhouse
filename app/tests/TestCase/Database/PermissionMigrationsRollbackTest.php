@@ -58,30 +58,54 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
     }
 
     /**
-     * @return array{createUses: string, updatePolicyUses: string, scopeFunction: bool} What the people migration owns:
-     *   which helper `person_create` and the people UPDATE policy call, and whether the new function exists.
+     * The exact state the people migration owns: the full definition and the security attributes of both functions
+     * (null when a function does not exist) and the USING and WITH CHECK of the people UPDATE policy.
+     *
+     * @return array{functions: array<string, array<string, mixed>|null>, policy: array<string, mixed>}
      */
     private function peopleAccess(): array
     {
-        $create = (string)$this->db()->execute(
-            "SELECT pg_get_functiondef(oid) FROM pg_proc
-             WHERE proname = 'person_create' AND pronamespace = 'public'::regnamespace",
-        )->fetch()[0];
-        $policy = (string)$this->db()->execute(
-            "SELECT qual FROM pg_policies WHERE tablename = 'people' AND policyname = 'people_update'",
-        )->fetch()[0];
+        $functions = [];
+        foreach (['person_create', 'person_in_permission_scope'] as $name) {
+            $row = $this->db()->execute(
+                "SELECT pg_get_functiondef(oid) AS def, prosecdef, pg_get_userbyid(proowner) AS owner,
+                        proconfig::text AS config, proacl::text AS acl, provolatile
+                 FROM pg_proc WHERE proname = ? AND pronamespace = 'public'::regnamespace",
+                [$name],
+            )->fetch('assoc');
+            $functions[$name] = $row === false ? null : $row;
+        }
+        $policy = $this->db()->execute(
+            "SELECT qual, with_check, cmd, roles::text AS roles FROM pg_policies
+             WHERE tablename = 'people' AND policyname = 'people_update'",
+        )->fetch('assoc');
+        $this->assertIsArray($policy);
+
+        return ['functions' => $functions, 'policy' => $policy];
+    }
+
+    /**
+     * What the original migrations (20261119000002 and 20261119000003) left: the same snapshot with the helper calls
+     * they used, and no `person_in_permission_scope`.
+     *
+     * @param array<string, mixed> $after Snapshot taken with the people migration applied.
+     * @return array<string, mixed>
+     */
+    private function originalPeopleAccess(array $after): array
+    {
+        $swap = static fn(mixed $text): mixed => is_string($text)
+            ? str_replace(
+                ["public.permission_dev_ids('people.manage')", "person_in_permission_scope(id, 'people.manage'::text)"],
+                ['public.admin_dev_ids()', 'person_in_admin_scope(id)'],
+                $text,
+            )
+            : $text;
+        $create = $after['functions']['person_create'];
+        $create['def'] = $swap($create['def']);
 
         return [
-            'createUses' => str_contains($create, 'permission_dev_ids') ? 'permission_dev_ids' : (
-                str_contains($create, 'admin_dev_ids') ? 'admin_dev_ids' : 'neither'
-            ),
-            'updatePolicyUses' => str_contains($policy, 'person_in_permission_scope')
-                ? 'person_in_permission_scope'
-                : (str_contains($policy, 'person_in_admin_scope') ? 'person_in_admin_scope' : 'neither'),
-            'scopeFunction' => (int)$this->db()->execute(
-                "SELECT COUNT(*) FROM pg_proc
-                 WHERE proname = 'person_in_permission_scope' AND pronamespace = 'public'::regnamespace",
-            )->fetch()[0] === 1,
+            'functions' => ['person_create' => $create, 'person_in_permission_scope' => null],
+            'policy' => array_map($swap, $after['policy']),
         ];
     }
 
@@ -122,10 +146,11 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         $this->assertContains('data_entry:units.manage', $matrixAfterUp);
         $this->assertNotContains('resident:units.view', $matrixAfterUp);
         $peopleAfterUp = $this->peopleAccess();
-        $this->assertSame(
-            ['createUses' => 'permission_dev_ids', 'updatePolicyUses' => 'person_in_permission_scope', 'scopeFunction' => true],
-            $peopleAfterUp,
-        );
+        $this->assertNotNull($peopleAfterUp['functions']['person_in_permission_scope']);
+        $this->assertStringContainsString('permission_dev_ids', $peopleAfterUp['functions']['person_create']['def']);
+        $this->assertStringContainsString('person_in_permission_scope', $peopleAfterUp['policy']['qual']);
+        $this->assertStringContainsString('person_in_permission_scope', $peopleAfterUp['policy']['with_check']);
+        $peopleBeforeUp = $this->originalPeopleAccess($peopleAfterUp);
         $this->assertContains('data_entry:people.manage', $matrixAfterUp);
         $this->assertContains('supervisor:people.view', $matrixAfterUp);
 
@@ -150,11 +175,9 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
                 array_values(array_diff($codesAfterUp, ['units.manage', 'people.view', 'people.manage'])),
                 $this->codes(),
             );
-            // The people migration restored the helper calls the original migrations used.
-            $this->assertSame(
-                ['createUses' => 'admin_dev_ids', 'updatePolicyUses' => 'person_in_admin_scope', 'scopeFunction' => false],
-                $this->peopleAccess(),
-            );
+            // The people migration restored exactly what the original migrations left: definition, owner, config and
+            // privileges of person_create, USING and WITH CHECK of the policy, and no scope function.
+            $this->assertSame($peopleBeforeUp, $this->peopleAccess());
         } catch (Throwable $e) {
             $failure = $e;
         }
