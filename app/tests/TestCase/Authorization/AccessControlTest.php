@@ -151,12 +151,16 @@ class AccessControlTest extends DatabaseTestCase
     {
         return [
             'administrator' => ['administrator', [
-                'developments.view', 'payments.create', 'reports.view', 'role_assignments.manage', 'units.manage',
-                'units.view',
+                'developments.view', 'payments.create', 'people.manage', 'people.view', 'reports.view',
+                'role_assignments.manage', 'units.manage', 'units.view',
             ]],
-            'accountant' => ['accountant', ['developments.view', 'payments.create', 'reports.view', 'units.view']],
-            'data_entry' => ['data_entry', ['developments.view', 'payments.create', 'units.manage', 'units.view']],
-            'supervisor' => ['supervisor', ['developments.view', 'reports.view', 'units.view']],
+            'accountant' => ['accountant', [
+                'developments.view', 'payments.create', 'people.view', 'reports.view', 'units.view',
+            ]],
+            'data_entry' => ['data_entry', [
+                'developments.view', 'payments.create', 'people.manage', 'people.view', 'units.manage', 'units.view',
+            ]],
+            'supervisor' => ['supervisor', ['developments.view', 'people.view', 'reports.view', 'units.view']],
             'guard' => ['guard', ['gate.log']],
             // AD13: a resident has no development-wide unit access until the resident sub-scope exists (D7).
             'resident' => ['resident', []],
@@ -223,6 +227,8 @@ class AccessControlTest extends DatabaseTestCase
         // Write code => read code of each managed domain table (Rls::managedDomainTable). Add a row with each new one.
         return [
             'units' => ['units.manage', 'units.view'],
+            // People are not a managed domain table, but editing one reads it first (the UPDATE policy's WHERE).
+            'people' => ['people.manage', 'people.view'],
         ];
     }
 
@@ -248,6 +254,53 @@ class AccessControlTest extends DatabaseTestCase
         $writers = $holders($write);
         $this->assertNotSame([], $writers, 'No role holds ' . $write);
         $this->assertSame([], array_values(array_diff($writers, $holders($read))));
+    }
+
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function peopleManageByRole(): array
+    {
+        return [
+            'administrator' => ['administrator', true],
+            'data_entry' => ['data_entry', true],
+            'accountant' => ['accountant', false],
+            'supervisor' => ['supervisor', false],
+            'guard' => ['guard', false],
+            'resident' => ['resident', false],
+        ];
+    }
+
+    /**
+     * @param string $role Role code.
+     * @param bool $holds Whether the role may manage people.
+     * @return void
+     */
+    #[DataProvider('peopleManageByRole')]
+    public function testPeopleManageIsHeldByAdministratorAndDataEntryOnly(string $role, bool $holds): void
+    {
+        $dev = $this->createDevelopment('A');
+        $other = $this->createDevelopment('B');
+        $user = $this->createUser('p_' . $role);
+        $this->assignRole($user, $role, $dev);
+
+        $scope = $this->access->allowedFor($user, 'people.manage');
+
+        $this->assertSame($holds ? [$dev] : [], $scope->ids());
+        $this->assertFalse($scope->allows($other));
+    }
+
+    public function testAResidentOnlyUserIsRefusedPeopleReads(): void
+    {
+        $dev = $this->createDevelopment('A');
+        $user = $this->createUser('tenant_people');
+        $this->assignRole($user, 'resident', $dev);
+
+        $this->assertTrue($this->access->allowedFor($user, 'people.view')->isEmpty());
+        // The control: a supervisor in the same development reads people.
+        $reader = $this->createUser('supervisor_people');
+        $this->assignRole($reader, 'supervisor', $dev);
+        $this->assertSame([$dev], $this->access->allowedFor($reader, 'people.view')->ids());
     }
 
     public function testUnitsManageNeedsAWritableAssignment(): void
