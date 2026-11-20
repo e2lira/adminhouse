@@ -16,6 +16,9 @@ declare(strict_types=1);
  *                    --owner-login to do so before the next migration window.
  * - kualitet_definer NOLOGIN, BYPASSRLS. Owns every SECURITY DEFINER function and trigger function.
  *
+ * Extensions: `btree_gist` is created in every provisioned database (the occupancies migration only checks for it, AD12).
+ * Re-run this script before migrating a database that predates the occupancies change.
+ *
  * Usage (superuser from the PG* environment variables or ~/.pgpass):
  *   php bin/provision_db_roles.php [--database=NAME ...] [--write-local] [--owner-login]
  *
@@ -223,6 +226,10 @@ foreach ($databases as $database) {
     // migrations grant it for those statements and revoke it right after (RowLevelSecurity::giveToDefiner).
     // Revoked here as well so a database provisioned by an older version converges.
     $db->exec('REVOKE CREATE ON SCHEMA public FROM ' . ident(ROLE_DEFINER));
+
+    // Extensions need a superuser, so provisioning owns them and the migrations only check (design AD12).
+    // btree_gist lets the occupancies exclusion constraints compare bigint and text with `=` inside a gist index.
+    $db->exec('CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public');
 
     // A function created later by either role is not executable by PUBLIC unless a migration says so.
     foreach ([ROLE_OWNER, ROLE_DEFINER] as $creator) {
