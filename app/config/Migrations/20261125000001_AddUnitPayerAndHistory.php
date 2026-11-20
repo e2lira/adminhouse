@@ -27,11 +27,21 @@ use Migrations\BaseMigration;
  *    EXECUTE for the runtime role only. It allows the super-administrator and the developments in
  *    `permission_dev_ids('occupancies.manage')` (a writable assignment, unarchived development). A missing, foreign
  *    and not-permitted unit all give the same error, so the call is not an existence oracle; the payer is validated
- *    only after that check, so a wrong payer reveals nothing about a unit either. Setting the current value again is
- *    a no-op;
+ *    only after that check, so a wrong payer reveals nothing about a unit either. The permission check is evaluated
+ *    before the NULL test, so a missing and a foreign unit do the same work. Setting the current value again is a
+ *    no-op;
  * 6. row-level security of the history: only SELECT, for `is_super()` or the developments in
  *    `permission_dev_ids('units.view')` (A6). It is unit data (a role, owner or tenant, no personal data), so it follows
  *    the unit read permission like `units` itself.
+ *
+ * Accepted limits:
+ * - The owner login (`kualitet_owner`) is outside the threat model: it owns the tables, so it can TRUNCATE the history
+ *   or DISABLE/DROP its trigger. It must stay out of application reach (it is only the migration login); the test
+ *   cleanup relies on TRUNCATE ... CASCADE, so no TRUNCATE trigger is added.
+ * - Every unit has history and the key is RESTRICT, so a unit can never be deleted. A mistaken unit is removed by a
+ *   controlled migration (see docs/runbooks/units-and-payer-history.md).
+ * - `down()` is lossy once payers changed: it drops `units.payer`, and going forward again backfills `owner`. Back up
+ *   `units` and `unit_payer_changes` before rolling back.
  *
  * `down()` removes exactly this, in reverse order. The grants of `units` are not touched by either direction.
  */
@@ -125,12 +135,14 @@ class AddUnitPayerAndHistory extends BaseMigration
                 <<<SQL
                     DECLARE
                         v_development_id bigint;
+                        v_allowed boolean;
                     BEGIN
                         SELECT u.development_id INTO v_development_id FROM public.units u WHERE u.id = p_unit_id;
-                        IF v_development_id IS NULL OR NOT (
-                            public.is_super()
-                            OR v_development_id = ANY (public.permission_dev_ids('occupancies.manage'))
-                        ) THEN
+                        v_allowed := public.is_super()
+                            OR COALESCE(
+                                v_development_id = ANY (public.permission_dev_ids('occupancies.manage')), false
+                            );
+                        IF v_development_id IS NULL OR NOT v_allowed THEN
                             RAISE EXCEPTION 'Not allowed to change the payer of this unit'
                                 USING ERRCODE = 'insufficient_privilege';
                         END IF;

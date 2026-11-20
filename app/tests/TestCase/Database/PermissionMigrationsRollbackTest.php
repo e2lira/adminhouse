@@ -257,6 +257,43 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
     private const BEFORE_THE_PAYER = 20261124000001;
 
     /**
+     * What the units migration (20261122000002) leaves on `units`, written out by hand: the exact state `down()` of the
+     * payer migration must return to. `payer` has no entry because the runtime role never held a privilege on it.
+     *
+     * @return array<string, mixed>
+     */
+    private function unitsBeforeThePayer(): array
+    {
+        $permission = static fn(string $code): string => "(( SELECT is_super() AS is_super) OR (development_id = ANY (( SELECT permission_dev_ids('{$code}'::text) AS permission_dev_ids)::bigint[])))";
+        $column = static fn(string $name, string $acl): array => ['units', $name, '{kualitet_app=' . $acl . '/kualitet_owner}'];
+
+        return [
+            'tablePrivileges' => [[
+                'units',
+                '{kualitet_owner=arwdDxtm/kualitet_owner,kualitet_app=rd/kualitet_owner,kualitet_definer=arwd/kualitet_owner}',
+                true,
+                true,
+            ]],
+            'columnPrivileges' => [
+                $column('development_id', 'a'), $column('section_id', 'aw'), $column('number', 'aw'),
+                $column('type', 'aw'), $column('lot_area_m2', 'aw'), $column('indiviso_pct', 'aw'),
+                $column('is_active', 'aw'), $column('created', 'a'), $column('modified', 'aw'),
+            ],
+            'policies' => [
+                ['units', 'units_delete', 'DELETE', '{kualitet_app}', '( SELECT is_super() AS is_super)', null],
+                ['units', 'units_insert', 'INSERT', '{kualitet_app}', null, $permission('units.manage')],
+                ['units', 'units_select', 'SELECT', '{kualitet_app}', $permission('units.view'), null],
+                ['units', 'units_update', 'UPDATE', '{kualitet_app}', $permission('units.manage'), $permission('units.manage')],
+            ],
+            'triggers' => [[
+                'units',
+                'units_forbid_development_change',
+                'CREATE TRIGGER units_forbid_development_change BEFORE UPDATE ON public.units FOR EACH ROW EXECUTE FUNCTION forbid_development_id_change()',
+            ]],
+        ];
+    }
+
+    /**
      * Everything the payer migration (20261125000001) owns or touches, as PostgreSQL prints it: the three functions
      * (definition, owner, SECURITY DEFINER, config, privileges, volatility), the policies and triggers of both tables,
      * and the table and column privileges of `units` and the history. A missing object is null or absent.
@@ -336,24 +373,13 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
             $this->assertSame(['units_forbid_development_change'], array_column($before['triggers'], 1));
             $this->assertNotContains('payer', array_column($before['unitColumns'], 0));
             $this->assertNotContains('units_payer_check', array_column($before['unitConstraints'], 0));
-            // The privileges of `units` are exactly the ones the units migration left: those of the forward state
-            // (the payer had no column privilege, and the table-level privileges are untouched).
-            $this->assertSame(
-                array_values(array_filter($after['tablePrivileges'], static fn(array $r): bool => $r[0] === 'units')),
-                $before['tablePrivileges'],
-            );
-            $this->assertSame(
-                array_values(array_filter($after['columnPrivileges'], static fn(array $r): bool => $r[0] === 'units')),
-                $before['columnPrivileges'],
-            );
-            $this->assertSame(
-                array_values(array_filter($after['policies'], static fn(array $p): bool => $p[0] === 'units')),
-                array_values(array_filter($before['policies'], static fn(array $p): bool => $p[0] === 'units')),
-            );
-            $this->assertSame(
-                array_values(array_filter($after['triggers'], static fn(array $t): bool => $t[1] === 'units_forbid_development_change')),
-                $before['triggers'],
-            );
+            // Independent literals, from the units migration (20261122000002), not from the forward state.
+            $this->assertSame($this->unitsBeforeThePayer(), [
+                'tablePrivileges' => $before['tablePrivileges'],
+                'columnPrivileges' => $before['columnPrivileges'],
+                'policies' => $before['policies'],
+                'triggers' => $before['triggers'],
+            ]);
             // A unit created while the migration is rolled back has no history yet.
             $this->seedUnit($development, null, '3');
         } catch (Throwable $e) {

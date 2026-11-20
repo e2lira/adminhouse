@@ -5,6 +5,7 @@ namespace App\Test\TestCase\Database;
 
 use App\Database\RowLevelSecurity;
 use App\Test\Support\DatabaseTestCase;
+use Throwable;
 
 /**
  * Database-level guarantees of the payer role and its history (spec occupancies: Responsible payer, Payer change
@@ -199,6 +200,52 @@ class UnitPayerSchemaTest extends DatabaseTestCase
         $other = $this->seedUnit($this->devB, null, '201');
         $this->assertSame([['owner', null]], $this->history($other));
         $this->assertCount(3, $this->history($unit));
+    }
+
+    public function testChangedAtIsTheClockAtTheChangeNotTheStartOfTheTransaction(): void
+    {
+        $unit = $this->seedUnit($this->devA, null, '101');
+        $connection = $this->db();
+
+        $connection->begin();
+        try {
+            $connection->execute('SELECT pg_sleep(0.05)');
+            $connection->execute("UPDATE units SET payer = 'tenant' WHERE id = ?", [$unit]);
+            $later = $connection->execute(
+                "SELECT changed_at > NOW()::timestamp FROM unit_payer_changes WHERE unit_id = ? AND payer = 'tenant'",
+                [$unit],
+            )->fetch()[0];
+            $connection->commit();
+        } catch (Throwable $e) {
+            $connection->rollback();
+            throw $e;
+        }
+
+        $this->assertTrue((bool)$later, 'changed_at is taken when the row is written, after the transaction started');
+    }
+
+    public function testTheTrailHasNoForeignKeyOnTheUserSoItOutlivesTheAccount(): void
+    {
+        $constraints = array_map(
+            static fn(array $row): string => $row[0] . ':' . $row[1],
+            $this->db()->execute(
+                "SELECT conname, contype FROM pg_constraint
+                 WHERE conrelid = to_regclass('public.unit_payer_changes') AND contype <> 'n' ORDER BY conname",
+            )->fetchAll(),
+        );
+        $this->assertSame([
+            'unit_payer_changes_payer_check:c',
+            'unit_payer_changes_pkey:p',
+            'unit_payer_changes_unit_fkey:f',
+        ], $constraints);
+
+        // An id that belongs to no user is accepted.
+        $unit = $this->seedUnit($this->devA, null, '101');
+        $this->assertNull($this->ownerSqlState(
+            "INSERT INTO unit_payer_changes (development_id, unit_id, payer, changed_at, changed_by_user_id)
+             VALUES (?, ?, 'tenant', NOW(), 987654321)",
+            [$this->devA, $unit],
+        ));
     }
 
     public function testTheHistoryOfAUnitCarriesItsDevelopment(): void

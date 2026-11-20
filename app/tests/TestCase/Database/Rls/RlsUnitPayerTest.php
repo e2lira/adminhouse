@@ -284,6 +284,118 @@ class RlsUnitPayerTest extends RlsTestCase
         $this->assertSame([...$this->seededHistory(), [$id, 'owner', $this->adminA]], $this->history());
     }
 
+    private function archiveDevelopmentA(): void
+    {
+        $this->db()->execute('UPDATE developments SET archived_at = NOW() WHERE id = ?', [$this->devA]);
+    }
+
+    public function testStaffOfAnArchivedDevelopmentGetTheSameRefusalAndNothingChanges(): void
+    {
+        $this->archiveDevelopmentA();
+        $this->actAs($this->loner);
+        $refusal = $this->setPayer($this->unitA, 'tenant');
+        $this->endSession();
+        $this->assertSame(self::DENIED, $refusal[0]);
+
+        foreach (['adminA', 'dataEntryA'] as $user) {
+            $this->actAs($this->{$user});
+            $this->assertSame($refusal, $this->setPayer($this->unitA, 'tenant'), $user);
+            $this->assertNothingChanged();
+        }
+    }
+
+    public function testTheSuperAdministratorStillChangesThePayerInAnArchivedDevelopment(): void
+    {
+        // Pins the database behavior (design A3 and A6): `permission_dev_ids` drops an archived development for staff
+        // but `is_super()` is not narrowed. Layer 1 (PR 5c) must refuse this write for everyone.
+        $this->archiveDevelopmentA();
+
+        $this->actAs($this->superUser);
+        $this->assertSame([null, null], $this->setPayer($this->unitA, 'tenant'));
+        $this->commitSession();
+
+        $this->assertSame('tenant', $this->payers()[$this->unitA]);
+        $this->assertSame([...$this->seededHistory(), [$this->unitA, 'tenant', $this->superUser]], $this->history());
+    }
+
+    public function testTheHistoryOfAnArchivedDevelopmentIsStillRead(): void
+    {
+        $this->archiveDevelopmentA();
+
+        foreach (['adminA', 'accountantA', 'supervisorA'] as $user) {
+            $this->actAs($this->{$user});
+            $this->assertSame([$this->unitA, $this->unitA2], $this->ids('SELECT unit_id FROM unit_payer_changes'), $user);
+            $this->endSession();
+        }
+        $this->actAs($this->superUser);
+        $this->assertSame([$this->unitA, $this->unitA2, $this->unitB], $this->ids('SELECT unit_id FROM unit_payer_changes'));
+    }
+
+    /**
+     * @param string $code Role code.
+     * @param list<string> $permissions Permission codes the role holds.
+     * @return int User with that one role in development A.
+     */
+    private function probeUser(string $code, array $permissions): int
+    {
+        $this->db()->execute('INSERT INTO roles (code, name) VALUES (?, ?)', [$code, $code]);
+        foreach ($permissions as $permission) {
+            $this->db()->execute(
+                'INSERT INTO role_permissions (role_id, permission_id)
+                 SELECT r.id, p.id FROM roles r, permissions p WHERE r.code = ? AND p.code = ?',
+                [$code, $permission],
+            );
+        }
+        $user = $this->createUser($code . '_user', null);
+        $this->assignRole($user, $code, $this->devA);
+
+        return $user;
+    }
+
+    private function dropProbeRoles(): void
+    {
+        $this->db()->execute("DELETE FROM role_assignments WHERE role_id IN (SELECT id FROM roles WHERE code LIKE 'probe_%')");
+        $this->db()->execute("DELETE FROM roles WHERE code LIKE 'probe_%'");
+    }
+
+    public function testOnlyTheOccupanciesManagePermissionAuthorizesAPayerChange(): void
+    {
+        try {
+            // Holds occupancies.manage and nothing else: allowed (the function is a definer, it needs no read right).
+            $manager = $this->probeUser('probe_occupancies', ['occupancies.manage']);
+            // Holds every neighboring permission but not occupancies.manage: refused.
+            $neighbor = $this->probeUser(
+                'probe_neighbor',
+                ['units.view', 'units.manage', 'people.view', 'people.manage', 'developments.view'],
+            );
+
+            $this->actAs($neighbor);
+            $this->assertSame(self::DENIED, $this->setPayer($this->unitA, 'tenant')[0]);
+            $this->assertNothingChanged();
+
+            $this->actAs($manager);
+            $this->assertSame([null, null], $this->setPayer($this->unitA, 'tenant'));
+            $this->assertSame(self::DENIED, $this->setPayer($this->unitB, 'tenant')[0]);
+            $this->commitSession();
+            $this->assertSame('tenant', $this->payers()[$this->unitA]);
+            $this->assertSame('owner', $this->payers()[$this->unitB]);
+        } finally {
+            $this->dropProbeRoles();
+        }
+    }
+
+    public function testARealChangeTouchesModifiedAndANoOpDoesNot(): void
+    {
+        $modified = fn(): string => (string)$this->db()->execute('SELECT modified::text FROM units WHERE id = ?', [$this->unitA])->fetch()[0];
+        $before = $modified();
+
+        $this->actAs($this->adminA);
+        $this->setPayer($this->unitA, 'tenant');
+        $this->commitSession();
+
+        $this->assertNotSame($before, $modified());
+    }
+
     public function testHistoryReadsFollowUnitsViewInTheDevelopmentOfTheRow(): void
     {
         // Rows by development: A has two units, B one.
