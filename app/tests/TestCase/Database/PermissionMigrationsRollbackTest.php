@@ -111,6 +111,27 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
     }
 
     /**
+     * @return list<string> `table.policy.command` for every policy of people and person_developments, sorted: no
+     *   policy is added, dropped or renamed by either direction.
+     */
+    private function policyNames(): array
+    {
+        $rows = $this->db()->execute(
+            "SELECT tablename || '.' || policyname || '.' || cmd FROM pg_policies
+             WHERE tablename IN ('people', 'person_developments') ORDER BY 1",
+        )->fetchAll();
+
+        return array_map(static fn(array $row): string => $row[0], $rows);
+    }
+
+    private const POLICY_NAMES = [
+        'people.people_delete.DELETE',
+        'people.people_select.SELECT',
+        'people.people_update.UPDATE',
+        'person_developments.person_developments_select.SELECT',
+    ];
+
+    /**
      * @return array<string, array<string, string|null>> The people read policies 20261119000003 created, verbatim.
      */
     private function originalReadPolicies(): array
@@ -231,6 +252,7 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         $peopleBeforeUp = $this->originalPeopleAccess($peopleAfterUp);
         // The control: the read policies follow people.view (A2), exactly as pinned.
         $this->assertSame($this->expectedReadPolicies(), $this->readPolicies());
+        $this->assertSame(self::POLICY_NAMES, $this->policyNames());
         $this->assertContains('data_entry:people.manage', $matrixAfterUp);
         $this->assertContains('supervisor:people.view', $matrixAfterUp);
 
@@ -260,6 +282,7 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
             $this->assertSame($peopleBeforeUp, $this->peopleAccess());
             // The read policies are back to the dev_ids() ones 20261119000003 created: same USING, command and roles.
             $this->assertSame($this->originalReadPolicies(), $this->readPolicies());
+            $this->assertSame(self::POLICY_NAMES, $this->policyNames());
         } catch (Throwable $e) {
             $failure = $e;
         }
@@ -283,6 +306,7 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         $this->assertSame($sectionsAndUnitsAfterUp, $this->sectionsAndUnits());
         $this->assertSame($peopleAfterUp, $this->peopleAccess());
         $this->assertSame($this->expectedReadPolicies(), $this->readPolicies());
+        $this->assertSame(self::POLICY_NAMES, $this->policyNames());
         $this->assertSame($matrixAfterUp, $this->matrix());
         $this->assertSame($codesAfterUp, $this->codes());
     }

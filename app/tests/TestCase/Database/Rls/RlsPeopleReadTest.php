@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Database\Rls;
 
+use App\Database\RowLevelSecurity as Rls;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Throwable;
 
 /**
  * Who reads people at the database level (design amendment A2, user decision 2026-11-19).
@@ -147,13 +149,16 @@ class RlsPeopleReadTest extends RlsTestCase
     {
         $this->actAs($this->archivedAdmin);
         $before = $this->visibleIds('people');
+        $linksBefore = $this->linksOf($this->personAC);
         $this->endSession();
+        $this->assertSame([$this->devC], $linksBefore, 'control: the link of C is read before the archive');
         $this->assertSame(self::sorted([$this->personAC, $this->personOnlyC]), $before, 'control: before the archive');
 
         $this->db()->execute('UPDATE developments SET archived_at = NOW() WHERE id = ?', [$this->devC]);
         $this->actAs($this->archivedAdmin);
 
         $this->assertSame($before, $this->visibleIds('people'));
+        $this->assertSame($linksBefore, $this->linksOf($this->personAC));
     }
 
     public function testAJobReadsNoPerson(): void
@@ -184,17 +189,105 @@ class RlsPeopleReadTest extends RlsTestCase
         $this->assertSame([], $this->visibleIds('person_developments'));
     }
 
-    public function testUsersWithoutAnActiveAssignmentReadOnlyTheirOwnPerson(): void
+    public function testOnlyAnActiveAccountReadsItsOwnPersonWhateverItsAssignments(): void
     {
-        $this->db()->execute('UPDATE users SET person_id = ? WHERE id = ?', [$this->personOnlyA, $this->endedAdmin]);
-        foreach (['disabledAdmin', 'futureAdmin', 'loner'] as $actor) {
-            $this->actAs($this->{$actor});
-            $this->assertSame([], $this->visibleIds('people'), $actor);
-            $this->endSession();
+        $own = [];
+        foreach (['disabledAdmin', 'futureAdmin', 'loner', 'endedAdmin'] as $actor) {
+            $own[$actor] = $this->createPerson('Own of ' . $actor, [$this->devA]);
+            $this->db()->execute('UPDATE users SET person_id = ? WHERE id = ?', [$own[$actor], $this->{$actor}]);
         }
 
-        $this->actAs($this->endedAdmin);
-        $this->assertSame([$this->personOnlyA], $this->visibleIds('people'));
+        // An inactive account has no identity at all: not even its own person.
+        $this->actAs($this->disabledAdmin);
+        $this->assertSame([], $this->visibleIds('people'), 'disabledAdmin');
+        $this->endSession();
+
+        // No assignment today: the own person only, never the others of the development.
+        foreach (['futureAdmin', 'loner', 'endedAdmin'] as $actor) {
+            $this->actAs($this->{$actor});
+            $this->assertSame([$own[$actor]], $this->visibleIds('people'), $actor);
+            $this->endSession();
+        }
+    }
+
+    public function testAnAdministratorOfAWhoIsGuardOfBReadsThePeopleOfAAndNothingOfB(): void
+    {
+        $mixed = $this->createUser('mixed_a_b', null);
+        $this->assignRole($mixed, 'administrator', $this->devA);
+        $this->assignRole($mixed, 'guard', $this->devB);
+        $this->actAs($mixed);
+
+        $visible = $this->visibleIds('people');
+
+        $this->assertSame($this->peopleOfA(), $visible);
+        $this->assertNotContains($this->personB, $visible, 'guard in B holds no people.view there');
+        $this->assertSame([], $this->linksOf($this->personB));
+    }
+
+    public function testAConnectionWithoutAnyContextReadsNothing(): void
+    {
+        $this->assertSame([], $this->visibleIds('people'));
+        $this->assertSame([], $this->visibleIds('person_developments'));
+    }
+
+    public function testBothReadPoliciesNameThePermissionAndNotAnAssignment(): void
+    {
+        foreach ([['people', 'people_select'], ['person_developments', 'person_developments_select']] as [$table, $name]) {
+            $qual = (string)$this->db()->execute(
+                'SELECT qual FROM pg_policies WHERE tablename = ? AND policyname = ?',
+                [$table, $name],
+            )->fetch()[0];
+
+            $this->assertStringContainsString("permission_dev_ids('people.view'", $qual, $name);
+            $this->assertStringNotContainsString(' dev_ids()', $qual, $name);
+        }
+    }
+
+    /**
+     * The people policy must hold on its own: its EXISTS reads links under the link policy, so a link policy opened
+     * wide must not widen people (the policy is the contract, the link policy is not its only guard).
+     *
+     * @return array<string, array{string}>
+     */
+    public static function actorsWithLimitedReads(): array
+    {
+        return ['resident' => ['resident'], 'guardA' => ['guardA'], 'readOnlyA' => ['readOnlyA']];
+    }
+
+    #[DataProvider('actorsWithLimitedReads')]
+    public function testThePeoplePolicyHoldsEvenWhenTheLinkPolicyIsOpenedWide(string $actor): void
+    {
+        $expected = [
+            'resident' => [$this->personResident],
+            'guardA' => [$this->personGuard],
+            'readOnlyA' => $this->peopleOfA(),
+        ][$actor];
+        $this->db()->execute('DROP POLICY person_developments_select ON person_developments');
+        $this->db()->execute(Rls::policy('person_developments', 'SELECT', 'true'));
+
+        try {
+            $this->actAs($this->{$actor});
+            $this->assertSame($expected, $this->visibleIds('people'), $actor);
+            $this->endSession();
+        } finally {
+            $this->restoreLinkPolicy();
+        }
+    }
+
+    private function restoreLinkPolicy(): void
+    {
+        try {
+            $this->endSession();
+        } catch (Throwable) {
+            // No session was open.
+        }
+        $ids = Rls::permissionDevIds('people.view');
+        $this->db()->execute('DROP POLICY IF EXISTS person_developments_select ON person_developments');
+        $this->db()->execute(Rls::policy(
+            'person_developments',
+            'SELECT',
+            'development_id = ANY (' . $ids . ') OR person_id = ' . Rls::PERSON_ID . ' OR ' . Rls::IS_SUPER,
+        ));
     }
 
     public function testHoldersOfPeopleManageStillReadWhatTheyCreateAndEdit(): void
