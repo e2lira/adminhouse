@@ -255,3 +255,4 @@
 
 | DU-4B-II-R1 | developments-units PR 4b-ii review round 1: edit scope proven, paging and sort contract, edit validation cases, Spanish control-character copy, design A4. | DONE (pending review) | build | Claude | 2026-11-20 |
 | DU-5A | developments-units PR 5a: occupancies table with exclusion constraints and end-once trigger, `btree_gist` provisioning and guard, `occupancies.manage`, RLS on `people.view` (design A5; tasks 12.1 to 12.8). | DONE (pending review) | build | Claude | 2026-11-20 |
+| DU-5A-R1 | developments-units PR 5a review round 1: exclusion constraints keyed on the development (cross-development oracle), structural provisioning/guard/CI tests, delete and idempotency cases. | DONE (pending review) | build | Claude | 2026-11-20 |
