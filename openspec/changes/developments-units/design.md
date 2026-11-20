@@ -124,3 +124,13 @@ Amends AD7 (and AD13's consequence). The AD7 row above says SELECT on a managed 
   these, because permissive policies are OR-ed and would reopen the table to every assignment. Narrowing (a resident
   sees only their own units) should be a RESTRICTIVE policy, or a change of the read predicate, so the permission
   check keeps applying.
+
+### A2 (2026-11-19, user decision "Si, hace el 4a-ii"): people reads follow `people.view`
+
+Extends A1 to `people` and `person_developments`, which are not managed-domain tables (no `development_id` on people). Superseded: people SELECT `own row OR is_super OR a link to a development in dev_ids()`.
+
+- `people` SELECT = `id = person_id() OR is_super() OR EXISTS (link to a development in permission_dev_ids('people.view'))`.
+- `person_developments` SELECT = `development_id = ANY(permission_dev_ids('people.view')) OR person_id = person_id() OR is_super()`. Left on `dev_ids()` a resident could enumerate person ids and links; the people policy's EXISTS also runs under this policy, so the two stay consistent.
+- Consequences: resident and guard read only their own person and links; a read-only assignment and an archived development still read (`.view` code); a job reads no person (`permission_dev_ids` is request-only; no production job reads people today, a future one needs its own mechanism); write implies read holds because `people.manage` is seeded only with `people.view`.
+- Migration `20261123000002_PeopleReadByPermission` replaces the two policies; `down()` restores the `dev_ids()` ones verbatim; `PermissionMigrationsRollbackTest` pins both states. UPDATE, DELETE, grants and functions are unchanged.
+- PR 4b: layer 1 people reads use `people.view` (already the plan, tasks 11.3 and 11.5); now the database agrees.

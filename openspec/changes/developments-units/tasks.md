@@ -6,7 +6,7 @@ Change: `developments-units` | Mode: openspec | Strict TDD: active | delivery_st
 
 | Item | Value |
 |---|---|
-| Chained PRs recommended | Yes (14 PRs: 1a-i, 1a-ii, 1b, 2a, 2b, 3a-i, 3a-ii, 3b-i, 3b-ii, 4a, 4b, 5a, 5b, 5c) |
+| Chained PRs recommended | Yes (15 PRs: 1a-i, 1a-ii, 1b, 2a, 2b, 3a-i, 3a-ii, 3b-i, 3b-ii, 4a, 4a-ii, 4b, 5a, 5b, 5c) |
 | 400-line budget risk | Medium overall; High for 3a-i, 3a-ii, 4b, 5a, 5c (each sits at or near 400 once reviewer-required items are folded in) |
 | Estimated total changed lines | ~4,550 (design estimate ~4,350 plus ~200 for W-A..W-E / S-1..S-4 additions) |
 | Decision needed before apply | No. Strategy is resolved (auto-chain, stacked-to-develop). If any PR measures over 400 during apply, apply MUST split it (pre-agreed fallback splits are listed per PR) rather than request size:exception. |
@@ -21,7 +21,7 @@ Chain rules (skills `chained-pr`, `work-unit-commits`):
 
 Dependency order (sequential; no parallel PRs because of the single-writer rule):
 
-    1a-i -> 1a-ii -> 1b -> 2a -> 2b -> 3a-i -> 3a-ii -> 3b-i -> 3b-ii -> 4a -> 4b -> 5a -> 5b -> 5c
+    1a-i -> 1a-ii -> 1b -> 2a -> 2b -> 3a-i -> 3a-ii -> 3b-i -> 3b-ii -> 4a -> 4a-ii -> 4b -> 5a -> 5b -> 5c
 
 Requirement traces use spec names: DS = development-scope, DM = development-management, U = units, P = people, O = occupancies.
 
@@ -279,6 +279,27 @@ Tasks:
 Verification: phpunit (alone), phpcs, migrate/rollback/migrate.
 PR description: template; Database change: definer functions, policy, seeds; flag security review of definer functions.
 Rollback boundary: rollback migration restores old `person_create` and policy; revert PR.
+
+---
+
+## PR 4a-ii: People reads follow people.view
+
+- Branch: `feat/du-4a-ii-people-read-permission` (cut from the tip of 4a)
+- Goal: people SELECT and person_developments SELECT follow `permission_dev_ids('people.view')` (design A2, user decision 2026-11-19).
+- Satisfies: P "Read scope" at the database level, AD7/A1 extended to people.
+- Est. lines: ~60 non-test, ~430 test
+
+Tasks:
+- [x] 10.9 RED: `RlsPeopleReadTest` (25 tests): adminA, dataEntryA, accountantA, supervisorA and a read-only holder read the people of A and not the B-only or C-only person; resident and guard read only their own person and links; adminB sees no A-only person; the shared A+B person is visible to both administrators; an archived development still reads; a job reads nothing; super reads all; no session reads nothing; people.manage holders still create (RETURNING) and edit. Existing tests updated: job expectation in `RlsTenancyPoliciesTest`, guard and resident cases in `RlsPeopleTest`.
+- [x] 10.10 GREEN: migration `20261123000002_PeopleReadByPermission` replaces `people_select` and `person_developments_select`; `down()` restores the `dev_ids()` policies verbatim.
+- [x] 10.11 `PermissionMigrationsRollbackTest`: exact qual, with_check, cmd and roles of both policies before and after `down()` and after the second `up()`.
+- [x] 10.12 Hand mutations red and restored (test-results); docs: ADR-0005 notes 6 and 8, design A2, this section.
+
+Note: a job context now reads no person (no production code did). `users`, `role_assignments`, `auth_*` functions and `person_id()` do not read `people` and are unchanged; definer functions run as owner and bypass RLS.
+
+Verification: phpunit (alone), phpcs.
+PR description: template; Database change: two policies replaced.
+Rollback boundary: rollback migration restores the `dev_ids()` policies; revert PR.
 
 ---
 

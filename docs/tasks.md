@@ -242,3 +242,5 @@
 | DU-4A | developments-units PR 4a: people database layer (`person_in_permission_scope`, `person_create` on `people.manage`, people UPDATE policy, `people.view` and `people.manage` seeds, ADR-0005 notes; tasks 10.1 to 10.8). | DONE (pending review) | build | Claude | 2026-11-19 |
 
 | DU-4A-R1 | developments-units PR 4a review round 1: exact rollback-state comparison, atomicity and visibility tests, super-administrator cases, scope function evaluated once, ADR-0005 notes 8 and 9. | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-4A-II | developments-units PR 4a-ii: people and person_developments reads follow `people.view` (migration `20261123000002`, design A2, tasks 10.9 to 10.12). | DONE (pending review) | build | Claude | 2026-11-19 |
