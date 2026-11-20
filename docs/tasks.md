@@ -252,3 +252,5 @@
 | DU-4B-I-R1 | developments-units PR 4b-i review round 1: delete refused, control characters rejected, intended edit edge cases pinned and documented (design A3), extra tests. | DONE (pending review) | build | Claude | 2026-11-20 |
 
 | DU-4B-II | developments-units PR 4b-ii: `PeopleController`, people templates and routes, default-deny walks (tasks 11.5 to 11.8). | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-4B-II-R1 | developments-units PR 4b-ii review round 1: edit scope proven, paging and sort contract, edit validation cases, Spanish control-character copy, design A4. | DONE (pending review) | build | Claude | 2026-11-20 |

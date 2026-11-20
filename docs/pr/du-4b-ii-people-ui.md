@@ -46,6 +46,17 @@ None.
 - The no-oracle property is by construction: people have no unique email or RFC, so there is nothing to differ on. If a uniqueness rule is ever added, this screen must be revisited.
 - Size: about 380 non-test lines (controller 261, trait 37, two templates 87, routes 16, minus 21 from `UnitsController`), within budget for a split slice. About 840 test lines.
 
+## Review round 1
+
+No criticals. Fixes, test first:
+
+- The edit-scope equivalent mutant is dead: a `Model.beforeSave` listener captures the `developmentScope` handed to the save, for a user who writes in A and only reads in B (allows A, not B); handing the view scope makes it red.
+- Pagination and sort contract: 101 people give 100 on page 1 and 1 on page 2, `?limit=1000` still gives at most 100, and `?sort=rfc`, `?sort=People.rfc` and `?sort=phone` are ignored (the order stays by name); widening `maxLimit` or the sortable fields is red.
+- Edit validation: invalid email, RFC over 13 characters and control characters are field errors in Spanish and leave the row untouched; add rejects control characters the same way (Spanish copy `No puede contener caracteres de control.`, matching the rule added to `PeopleTable` in 4b-i).
+- The duplicate-email test now has a companion that asserts no unique index exists on `people` (so a duplicate cannot differ).
+- Accepted and documented (design A4): a refused edit of a shared person tells the editor that some link they cannot see exists, never which one. The single generic message stays.
+- Open product question (not a defect, matches the spec "Read scope"): accountant and supervisor see RFC in the list because they hold `people.view`. Whether RFC (and, with it, email and phone) should need a narrower permission is open, next to the bank-field visibility follow-up for developments.
+
 ## Checklist
 
 - [x] Tests written first and passing
