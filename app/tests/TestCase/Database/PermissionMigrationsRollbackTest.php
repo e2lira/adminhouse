@@ -11,7 +11,7 @@ use Throwable;
 
 /**
  * AD6, AD13: the `permission_dev_ids`, `units.manage` and resident-revoke migrations undo exactly what they did, and
- * so do the later `sections`, `units` and people migrations (task 7.6, 10.8: tables, policies, triggers, functions and
+ * so do the later `sections`, `units` and people migrations (scope and read policies) (task 7.6, 10.8: tables, policies, triggers, functions and
  * seeds go away and come back).
  *
  * Rolls them back on the test database and forwards again, comparing the role/permission rows. The forward run
@@ -75,13 +75,91 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
             )->fetch('assoc');
             $functions[$name] = $row === false ? null : $row;
         }
-        $policy = $this->db()->execute(
-            "SELECT qual, with_check, cmd, roles::text AS roles FROM pg_policies
-             WHERE tablename = 'people' AND policyname = 'people_update'",
-        )->fetch('assoc');
-        $this->assertIsArray($policy);
+        $policy = $this->policy('people', 'people_update');
 
         return ['functions' => $functions, 'policy' => $policy];
+    }
+
+    /**
+     * @param string $table Table name.
+     * @param string $name Policy name.
+     * @return array<string, mixed> USING, WITH CHECK, command and roles of a policy.
+     */
+    private function policy(string $table, string $name): array
+    {
+        $policy = $this->db()->execute(
+            'SELECT qual, with_check, cmd, roles::text AS roles FROM pg_policies WHERE tablename = ? AND policyname = ?',
+            [$table, $name],
+        )->fetch('assoc');
+        $this->assertIsArray($policy, $name);
+
+        return $policy;
+    }
+
+    /**
+     * The people read policies the 4a-ii migration owns (A2): the exact state it leaves and the exact state the
+     * original migration (20261119000003) left, pinned as PostgreSQL prints them.
+     *
+     * @return array{people_select: array<string, mixed>, person_developments_select: array<string, mixed>}
+     */
+    private function readPolicies(): array
+    {
+        return [
+            'people_select' => $this->policy('people', 'people_select'),
+            'person_developments_select' => $this->policy('person_developments', 'person_developments_select'),
+        ];
+    }
+
+    /**
+     * @return array<string, array<string, string|null>> The people read policies 20261119000003 created, verbatim.
+     */
+    private function originalReadPolicies(): array
+    {
+        $dev = '( SELECT dev_ids() AS dev_ids)::bigint[]';
+
+        return [
+            'people_select' => [
+                'qual' => "((id = ( SELECT person_id() AS person_id)) OR ( SELECT is_super() AS is_super) OR (EXISTS ( SELECT 1\n"
+                    . "   FROM person_developments pd\n"
+                    . "  WHERE ((pd.person_id = people.id) AND (pd.development_id = ANY ({$dev}))))))",
+                'with_check' => null,
+                'cmd' => 'SELECT',
+                'roles' => '{kualitet_app}',
+            ],
+            'person_developments_select' => [
+                'qual' => "((development_id = ANY ({$dev})) OR (person_id = ( SELECT person_id() AS person_id))"
+                    . ' OR ( SELECT is_super() AS is_super))',
+                'with_check' => null,
+                'cmd' => 'SELECT',
+                'roles' => '{kualitet_app}',
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, array<string, string|null>> The people read policies 20261123000002 creates, verbatim.
+     */
+    private function expectedReadPolicies(): array
+    {
+        $view = "( SELECT permission_dev_ids('people.view'::text) AS permission_dev_ids)::bigint[]";
+
+        return [
+            'people_select' => [
+                'qual' => "((id = ( SELECT person_id() AS person_id)) OR ( SELECT is_super() AS is_super) OR (EXISTS ( SELECT 1\n"
+                    . "   FROM person_developments pd\n"
+                    . "  WHERE ((pd.person_id = people.id) AND (pd.development_id = ANY ({$view}))))))",
+                'with_check' => null,
+                'cmd' => 'SELECT',
+                'roles' => '{kualitet_app}',
+            ],
+            'person_developments_select' => [
+                'qual' => "((development_id = ANY ({$view})) OR (person_id = ( SELECT person_id() AS person_id))"
+                    . ' OR ( SELECT is_super() AS is_super))',
+                'with_check' => null,
+                'cmd' => 'SELECT',
+                'roles' => '{kualitet_app}',
+            ],
+        ];
     }
 
     /**
@@ -151,6 +229,8 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         $this->assertStringContainsString('person_in_permission_scope', $peopleAfterUp['policy']['qual']);
         $this->assertStringContainsString('person_in_permission_scope', $peopleAfterUp['policy']['with_check']);
         $peopleBeforeUp = $this->originalPeopleAccess($peopleAfterUp);
+        // The control: the read policies follow people.view (A2), exactly as pinned.
+        $this->assertSame($this->expectedReadPolicies(), $this->readPolicies());
         $this->assertContains('data_entry:people.manage', $matrixAfterUp);
         $this->assertContains('supervisor:people.view', $matrixAfterUp);
 
@@ -178,6 +258,8 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
             // The people migration restored exactly what the original migrations left: definition, owner, config and
             // privileges of person_create, USING and WITH CHECK of the policy, and no scope function.
             $this->assertSame($peopleBeforeUp, $this->peopleAccess());
+            // The read policies are back to the dev_ids() ones 20261119000003 created: same USING, command and roles.
+            $this->assertSame($this->originalReadPolicies(), $this->readPolicies());
         } catch (Throwable $e) {
             $failure = $e;
         }
@@ -200,6 +282,7 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         $this->assertTrue($this->functionExists());
         $this->assertSame($sectionsAndUnitsAfterUp, $this->sectionsAndUnits());
         $this->assertSame($peopleAfterUp, $this->peopleAccess());
+        $this->assertSame($this->expectedReadPolicies(), $this->readPolicies());
         $this->assertSame($matrixAfterUp, $this->matrix());
         $this->assertSame($codesAfterUp, $this->codes());
     }

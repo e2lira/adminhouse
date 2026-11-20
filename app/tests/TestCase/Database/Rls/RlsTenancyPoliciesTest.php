@@ -132,8 +132,9 @@ class RlsTenancyPoliciesTest extends RlsTestCase
         );
         $this->endSession();
 
+        // people follow people.view (A2), which is request-only: a job reads no person, whatever its developments.
         $this->actAsJob([$this->devB]);
-        $this->assertSame([$this->personB, $this->personShared], $this->visibleIds('people'));
+        $this->assertSame([], $this->visibleIds('people'));
     }
 
     public function testOwnPersonStaysVisibleWithoutAnyAssignment(): void
