@@ -267,14 +267,14 @@ Rollback boundary: revert PR (routes/templates only).
 - Est. lines: ~380
 
 Tasks:
-- [ ] 10.1 RED: `AccessControlTest::roleMatrix`: `people.view` for administrator, accountant, data_entry, supervisor (not resident); `people.manage` for administrator, data_entry.
-- [ ] 10.2 GREEN (S-4): migration seeds `people.view` and `people.manage` FIRST, in the same migration, before replacing the `person_create` body; `down()` deletes only these codes and restores the previous `person_create` and people policy.
-- [ ] 10.3 RED: RLS tests for `person_create(development, data)` per actor: adminA and dataEntryA create (person + link atomic); accountant, supervisor, resident, read-only refused and nothing stored; adminA for B refused with no info about B; archived development refused; super allowed; direct INSERT into `people` by `kualitet_app` denied.
-- [ ] 10.4 GREEN: `person_create` uses `permission_dev_ids('people.manage')`; owner `kualitet_definer`, pinned `search_path`, EXECUTE only `kualitet_app`.
-- [ ] 10.5 RED: `person_in_permission_scope(person_id, code)` tests (S-3): definer function with pinned `search_path`; true only if the person has at least one link AND every linked development is in `permission_dev_ids(code)`; zero links false.
-- [ ] 10.6 GREEN: function; people UPDATE policy `is_super OR id = person_id() OR person_in_permission_scope(id, 'people.manage')`.
-- [ ] 10.7 RED/GREEN: UPDATE scenarios: admin and data_entry edit person linked only to A; shared A+B person refused for both (S-3: documented that an archived linked development blocks editing a shared person, since the archived dev drops out of `permission_dev_ids`); accountant/supervisor/read-only refused; unlinked editor sees/changes 0 rows.
-- [ ] 10.8 Document in ADR-0005 the AD8 deviation, the S-3 archived-linked-development behavior; Migration up/down/up; Docs.
+- [x] 10.1 RED: `AccessControlTest::roleMatrix`: `people.view` for administrator, accountant, data_entry, supervisor (not resident); `people.manage` for administrator, data_entry.
+- [x] 10.2 GREEN (S-4): migration seeds `people.view` and `people.manage` FIRST, in the same migration, before replacing the `person_create` body; `down()` deletes only these codes and restores the previous `person_create` and people policy.
+- [x] 10.3 RED: RLS tests for `person_create(development, data)` per actor: adminA and dataEntryA create (person + link atomic); accountant, supervisor, resident, read-only refused and nothing stored; adminA for B refused with no info about B; archived development refused; super allowed; direct INSERT into `people` by `kualitet_app` denied.
+- [x] 10.4 GREEN: `person_create` uses `permission_dev_ids('people.manage')`; owner `kualitet_definer`, pinned `search_path`, EXECUTE only `kualitet_app`.
+- [x] 10.5 RED: `person_in_permission_scope(person_id, code)` tests (S-3): definer function with pinned `search_path`; true only if the person has at least one link AND every linked development is in `permission_dev_ids(code)`; zero links false.
+- [x] 10.6 GREEN: function; people UPDATE policy `is_super OR id = person_id() OR person_in_permission_scope(id, 'people.manage')`.
+- [x] 10.7 RED/GREEN: UPDATE scenarios: admin and data_entry edit person linked only to A; shared A+B person refused for both (S-3: documented that an archived linked development blocks editing a shared person, since the archived dev drops out of `permission_dev_ids`); accountant/supervisor/read-only refused; unlinked editor sees/changes 0 rows.
+- [x] 10.8 Document in ADR-0005 the AD8 deviation, the S-3 archived-linked-development behavior; Migration up/down/up; Docs.
 
 Verification: phpunit (alone), phpcs, migrate/rollback/migrate.
 PR description: template; Database change: definer functions, policy, seeds; flag security review of definer functions.
