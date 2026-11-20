@@ -39,6 +39,8 @@ class RlsOccupanciesTest extends RlsTestCase
 
     private int $personA;
 
+    private int $dataEntryB;
+
     /**
      * Rows as the owner stored them: `a1` (primary owner, resident's person), `a2` (non-primary tenant of A, shared
      * person), `b1` (primary owner of B).
@@ -324,16 +326,22 @@ class RlsOccupanciesTest extends RlsTestCase
 
     public function testAdministratorAndDataEntryCreateInTheirDevelopmentOnly(): void
     {
-        foreach (['adminA', 'dataEntryA'] as $user) {
+        foreach (['adminA' => $this->personA, 'dataEntryA' => $this->personShared] as $user => $person) {
             $this->actAs($this->{$user});
 
-            $this->assertAllowed($this->insertSql(), $this->newRow($this->devA, $this->unitA1, $this->personA));
+            $this->assertAllowed($this->insertSql(), $this->newRow($this->devA, $this->unitA1, $person));
             $this->assertSame(self::DENIED, $this->sqlStateOf($this->insertSql(), $this->newRow($this->devB, $this->unitB, $this->personB)), $user);
-            $this->endSession();
+            $this->commitSession();
         }
 
-        $count = (int)$this->db()->execute('SELECT COUNT(*) FROM occupancies WHERE development_id = ?', [$this->devB])->fetch()[0];
-        $this->assertSame(1, $count);
+        // Read back as the owner: both inserts of A were stored, nothing reached B.
+        $counts = $this->db()->execute(
+            'SELECT development_id, COUNT(*) FROM occupancies GROUP BY development_id ORDER BY development_id',
+        )->fetchAll();
+        $this->assertSame(
+            [[$this->devA, 4], [$this->devB, 1]],
+            array_map(static fn(array $r): array => [(int)$r[0], (int)$r[1]], $counts),
+        );
     }
 
     public function testAdministratorAndDataEntryEndAnOccupancyOfTheirDevelopmentOnce(): void
@@ -453,6 +461,18 @@ class RlsOccupanciesTest extends RlsTestCase
         $this->assertAllowed($this->insertSql(), $this->newRow($this->devB, $this->unitB, $this->personShared));
         $this->assertAllowed("UPDATE occupancies SET ends_on = '2026-09-01' WHERE id = {$this->row['b1']}");
         $this->assertAllowed("UPDATE occupancies SET ends_on = '2026-09-01' WHERE id = {$this->row['a1']}");
+        $this->commitSession();
+
+        $rows = $this->db()->execute('SELECT id, development_id, ends_on::text FROM occupancies ORDER BY id, development_id')->fetchAll();
+        $this->assertSame(
+            [
+                [$this->row['a1'], $this->devA, '2026-09-01'],
+                [$this->row['a2'], $this->devA, null],
+                [$this->row['b1'], $this->devB, '2026-09-01'],
+                [$this->row['b1'] + 1, $this->devB, null],
+            ],
+            array_map(static fn(array $r): array => [(int)$r[0], (int)$r[1], $r[2]], $rows),
+        );
     }
 
     public function testOnlyTheSuperAdministratorDeletes(): void
@@ -494,6 +514,54 @@ class RlsOccupanciesTest extends RlsTestCase
         $this->assertSame(self::DENIED, $this->sqlStateOf($this->insertSql(), $this->newRow($this->devB, $this->unitB, $this->personB)));
         // A person of the development, whom the user may not even have met, works: the link is what counts.
         $this->assertAllowed($this->insertSql(), $this->newRow($this->devA, $this->unitA1, $this->personShared));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function writersOfB(): array
+    {
+        return [
+            'administrator of B' => ['adminB'],
+            'data_entry of B' => ['dataEntryB'],
+        ];
+    }
+
+    /**
+     * W1: the exclusion constraints are checked before the composite foreign key, so a key on the global `unit_id`
+     * alone would answer 23P01 for a unit of A that has a conflicting occupancy and 23503 for one that has not,
+     * telling a writer of B who occupies what in A. With `development_id` first in both, a unit of another
+     * development never conflicts: the answer is the one for a unit that does not exist.
+     *
+     * @param string $user Writer of B.
+     * @return void
+     */
+    #[DataProvider('writersOfB')]
+    public function testAWriterOfAnotherDevelopmentCannotProbeTheOccupantsOfAUnitOfA(string $user): void
+    {
+        $dataEntryB = $this->createUser('data_entry_b', null);
+        $this->assignRole($dataEntryB, 'data_entry', $this->devB);
+        $this->dataEntryB = $dataEntryB;
+        $this->actAs($this->{$user});
+
+        $sql = "INSERT INTO occupancies (development_id, unit_id, person_id, role, is_primary, starts_on, created, modified)
+                VALUES (?, ?, ?, ?, ?, '2026-06-01', NOW(), NOW())";
+        $missing = $this->unitB + 1000;
+        // Unit A1 has an open-ended primary owner (a1, the resident's person); unit A2 has a tenant, the shared person.
+        $cases = [
+            'conflicting primary' => [$this->unitA1, $this->personB, 'owner', 't', $missing],
+            'conflicting same-person overlap' => [$this->unitA2, $this->personShared, 'tenant', 'f', $missing],
+            'both at once' => [$this->unitA2, $this->personShared, 'tenant', 't', $missing],
+        ];
+        foreach ($cases as $name => [$unit, $person, $role, $primary, $absent]) {
+            $foreign = $this->failure($sql, [$this->devB, $unit, $person, $role, $primary]);
+            $control = $this->failure($sql, [$this->devB, $absent, $person, $role, $primary]);
+
+            $this->assertSame([self::FOREIGN_KEY, 'occupancies_unit_fkey'], $control, $name);
+            $this->assertSame($control, $foreign, $name);
+        }
+        // Nothing was stored, and the same people on a unit of B still work.
+        $this->assertAllowed($sql, [$this->devB, $this->unitB, $this->personShared, 'tenant', 'f']);
     }
 
     public function testTheExclusionConstraintsHoldForStaffToo(): void

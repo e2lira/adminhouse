@@ -298,6 +298,52 @@ class OccupanciesSchemaTest extends DatabaseTestCase
         ));
     }
 
+    public function testTheDevelopmentForeignKeyHasNoCascade(): void
+    {
+        $definition = $this->db()->execute(
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint
+             WHERE conrelid = 'occupancies'::regclass AND conname = 'occupancies_development_id_fkey'",
+        )->fetch()[0];
+
+        $this->assertSame('FOREIGN KEY (development_id) REFERENCES developments(id)', $definition);
+    }
+
+    public function testAUnitOrADevelopmentWithOccupanciesCannotBeDeleted(): void
+    {
+        $this->own($this->unitA, $this->ana, 'owner', true, '2026-01-01');
+
+        $unit = $this->attempt('DELETE FROM units WHERE id = ?', [$this->unitA]);
+        $this->assertSame([self::FOREIGN_KEY, 'occupancies_unit_fkey'], $unit);
+        // A development is also held by its units, which are checked too: the refusal is a foreign key either way.
+        $development = $this->attempt('DELETE FROM developments WHERE id = ?', [$this->devA]);
+        $this->assertSame(self::FOREIGN_KEY, $development[0]);
+        $this->assertSame(1, (int)$this->db()->execute('SELECT COUNT(*) FROM occupancies')->fetch()[0]);
+        $this->assertSame(1, (int)$this->db()->execute('SELECT COUNT(*) FROM units WHERE id = ?', [$this->unitA])->fetch()[0]);
+        // Without occupancies the same unit is deletable: the refusal comes from the occupancy.
+        $this->assertSame([null, null], $this->attempt('DELETE FROM units WHERE id = ?', [$this->unitA2]));
+    }
+
+    public function testSettingTheSameEndDateAgainIsAcceptedAndChangesNothing(): void
+    {
+        $this->own($this->unitA, $this->ana, 'tenant', true, '2026-01-01', '2026-09-01');
+        $id = $this->id('Ana', '2026-01-01');
+        $before = $this->db()->execute('SELECT * FROM occupancies WHERE id = ?', [$id])->fetch('assoc');
+
+        // A repeated submit of the same end is idempotent (the trigger refuses only a different value).
+        $this->assertSame([null, null], $this->attempt("UPDATE occupancies SET ends_on = '2026-09-01' WHERE id = ?", [$id]));
+        $this->assertSame($before, $this->db()->execute('SELECT * FROM occupancies WHERE id = ?', [$id])->fetch('assoc'));
+    }
+
+    public function testNoBoundExistsOnTheEndBeyondItBeingAfterTheStart(): void
+    {
+        // Accepted by design (review S1): an end in the past or far ahead is a valid period, and a same-day row
+        // (one day long) is corrected by the super-administrator, who deletes it.
+        $this->assertSame([null, null], $this->own($this->unitA, $this->ana, 'owner', false, '1990-01-01', '1990-01-02'));
+        $this->own($this->unitA, $this->beto, 'owner', false, '2026-01-01');
+        $id = $this->id('Beto', '2026-01-01');
+        $this->assertSame([null, null], $this->attempt("UPDATE occupancies SET ends_on = '2026-01-02' WHERE id = ?", [$id]));
+    }
+
     public function testBothExclusionConstraintsAreExactlyTheDesignedOnes(): void
     {
         $rows = $this->db()->execute(
@@ -308,11 +354,11 @@ class OccupanciesSchemaTest extends DatabaseTestCase
         $this->assertSame([
             [
                 self::OVERLAP,
-                "EXCLUDE USING gist (unit_id WITH =, person_id WITH =, role WITH =, daterange(starts_on, ends_on, '[)'::text) WITH &&)",
+                "EXCLUDE USING gist (development_id WITH =, unit_id WITH =, person_id WITH =, role WITH =, daterange(starts_on, ends_on, '[)'::text) WITH &&)",
             ],
             [
                 self::ONE_PRIMARY,
-                "EXCLUDE USING gist (unit_id WITH =, role WITH =, daterange(starts_on, ends_on, '[)'::text) WITH &&) WHERE (is_primary)",
+                "EXCLUDE USING gist (development_id WITH =, unit_id WITH =, role WITH =, daterange(starts_on, ends_on, '[)'::text) WITH &&) WHERE (is_primary)",
             ],
         ], $rows);
     }

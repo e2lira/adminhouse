@@ -21,6 +21,10 @@ use Migrations\BaseMigration;
  *      writes in, which are readable by the caller.
  *    - `(development_id, unit_id)` references `units (development_id, id)`, so a unit is always of the occupancy's
  *      development.
+ *    - Both exclusion constraints start with `development_id WITH =`. They are checked before the composite foreign
+ *      key, so a key on the global `unit_id` alone would answer 23P01 for a unit of another development that has a
+ *      conflicting occupancy and 23503 for one that has not: an oracle on who occupies what elsewhere. With the
+ *      development in the key, a unit of another development never conflicts (review W1).
  *    - `occupancies_no_overlap_per_person`: one person cannot hold overlapping periods of the same role on a unit.
  *    - `occupancies_one_primary_per_role`: a unit has at most one primary owner and one primary tenant at a time;
  *      non-primary co-owners and roommates are not limited by it.
@@ -81,10 +85,11 @@ class CreateOccupancies extends BaseMigration
                 CONSTRAINT occupancies_person_development_fkey FOREIGN KEY (person_id, development_id)
                     REFERENCES person_developments (person_id, development_id) ON DELETE RESTRICT,
                 CONSTRAINT occupancies_no_overlap_per_person EXCLUDE USING gist (
-                    unit_id WITH =, person_id WITH =, role WITH =, daterange(starts_on, ends_on, '[)') WITH &&
+                    development_id WITH =, unit_id WITH =, person_id WITH =, role WITH =,
+                    daterange(starts_on, ends_on, '[)') WITH &&
                 ),
                 CONSTRAINT occupancies_one_primary_per_role EXCLUDE USING gist (
-                    unit_id WITH =, role WITH =, daterange(starts_on, ends_on, '[)') WITH &&
+                    development_id WITH =, unit_id WITH =, role WITH =, daterange(starts_on, ends_on, '[)') WITH &&
                 ) WHERE (is_primary)
             )
         SQL);
