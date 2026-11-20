@@ -22,9 +22,9 @@ PR 4a of `developments-units` (tasks 10.1 to 10.8; spec people: Create person th
 
 ## Verification
 
-- `vendor/bin/phpunit` (run alone, real PostgreSQL): `OK (1579 tests, 9631 assertions)` (1529 and 8497 on the 3b-ii tip). The new tests were seen failing first (8 in `AccessControlTest`, 14 of 42 in `RlsPeopleTest` before the migration).
+- `vendor/bin/phpunit` (run alone, real PostgreSQL): `OK (1584 tests, 9688 assertions)` after review round 1 (1579 and 9631 before it; 1529 and 8497 on the 3b-ii tip). The new tests were seen failing first (8 in `AccessControlTest`, 14 of 42 in `RlsPeopleTest` before the migration).
 - `vendor/bin/phpcs`: clean on every touched file.
-- Migrations: rolled back and re-applied by `PermissionMigrationsRollbackTest` (matrix, codes, which helper `person_create` and the UPDATE policy call, presence of the new function) and by `bin/cake migrations rollback -c test_migrations` on the test database. The developer database was not migrated.
+- Migrations: rolled back and re-applied by `PermissionMigrationsRollbackTest` (matrix, codes, which helper `person_create` and the UPDATE policy call, presence of the new function) and by `bin/cake migrations rollback -c test_migrations` on the test database. Review round 1: the rollback test now compares the exact function definition, owner, config and privileges and the policy USING and WITH CHECK before and after `down()` and after the second `up()`. The developer database was not migrated.
 - Security review: self-review only so far. **A fresh-context security review of the two definer functions and the policy is requested before merge.** Hand mutations, each seen red and restored: ANY instead of EVERY linked development in `person_in_permission_scope`; `person_create` on `dev_ids()`; EXECUTE on `person_create` granted to PUBLIC; the UPDATE policy left on `person_in_admin_scope`; the write code read as the view code (an archived linked development no longer blocks).
 - Manual checks: none in a browser (no screen changes).
 - Not verified: GitHub Actions (not pushed); the application layer (arrives in 4b); `bin/provision_db_roles.php` is not needed and was not re-run; the people SELECT policy (unchanged, see below).
@@ -47,11 +47,18 @@ Details worth a reviewer's attention:
 
 Run `bin/cake migrations migrate -c migrations`. No provisioning change.
 
+## Review round 1
+
+No criticals. Reliability gaps fixed test-first (all behavior was already correct): exact rollback-state comparison, a real mid-function atomicity failure, visibility asserted before every denied UPDATE, 0-row, SQLSTATE and message assertions, super-administrator cases, cross-development refusals for data_entry and adminB. `person_in_permission_scope` now calls `permission_dev_ids` once per call. Mutations red and restored are in `docs/test-results.md`. The people SELECT question below is untouched, waiting for the user.
+
 ## Known limits and follow-ups
 
 - **Decision for the user: people reads still follow `dev_ids()`, not `people.view`.** The people SELECT policy (migration `20261119000003`) is unchanged: any person linked to a development where the session has any assignment is readable at the database level, including by a guard or a resident, and including the RFC, email and phone columns. The design (A1) moved only managed-domain tables to permission-based reads, and tasks 10.x do not touch the people SELECT policy, so this PR does not either. The spec says a resident-only user must be refused people reads, which today is enforced in layer 1 only (4b policies), not in the database. Recommendation: a small follow-up migration (before 4b merges, or as 4a-ii) that sets the people SELECT policy to `is_super OR id = person_id() OR EXISTS (link to a development in permission_dev_ids('people.view'))`. It needs care because the UPDATE policy's WHERE and `person_create`'s `RETURNING` run under SELECT (the seeds already pair `people.manage` with `people.view`, tested), jobs would stop reading people (`permission_dev_ids` is request-only; the existing tenancy test reads people from a job context and would have to change), and `users`/`role_assignments` screens that join people would need checking.
 - `people.view` is seeded for supervisor and accountant as the spec says; until the SELECT decision above, the seed only matters to layer 1.
-- Size: about 160 lines in the migration, no other non-test code. About 610 test lines. Within budget.
+- Own-row and staff edits of contact data: a person edits their own row, RFC included, and `people.manage` (data_entry too) edits the person record of an administrator linked only to its developments. Neither grants any login (authentication uses `users`), but a future email-based reset must not trust `people.email` (ADR-0005 note 9).
+- `people.view` has no database effect yet (ADR-0005 note 8): same open decision as above.
+- The super-administrator can still create people in an archived development at the database level (the spec is silent; layer 1 `canManagePeople` refuses it). Pinned by a test.
+- Size: about 160 lines in the migration, no other non-test code. About 650 test lines. Within budget.
 
 ## Checklist
 
