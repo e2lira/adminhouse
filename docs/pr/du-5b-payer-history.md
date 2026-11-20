@@ -27,7 +27,7 @@ PR 5b of `developments-units` (tasks 13.1 to 13.6; spec occupancies: Responsible
 
 ## Verification
 
-- `vendor/bin/phpunit` (run alone, real PostgreSQL): `OK (1939 tests, 11652 assertions)` (1911 and 11383 on the 5a review tip).
+- `vendor/bin/phpunit` (run alone, real PostgreSQL): `OK (1946 tests, 11676 assertions)` (1911 and 11383 on the 5a review tip; 1939 and 11652 before review round 1).
 - `vendor/bin/phpcs`: clean on every touched file.
 - Migrations: `bin/cake migrations rollback -c test_migrations` and `migrate` run by hand on the test database; `PermissionMigrationsRollbackTest` rolls back to before this migration and forward again and compares function definitions, owners, `proconfig`, `proacl`, policies, triggers, and table and column privileges of `units` and the history, and checks the backfill. The developer database was not migrated.
 - Hand mutations, each seen red and restored (details in `docs/test-results.md`): function authorized by `dev_ids()`, EXECUTE to PUBLIC, `search_path` unpinned, column grants of `payer` to the runtime role (UPDATE and INSERT), append-only trigger skipping the owner, history SELECT on `dev_ids()`, a missing unit answering differently, payer validated before the unit, FK cascade, logging trigger without its WHEN, update of the same value, NULL acting user, super-administrator branch removed.
@@ -57,6 +57,14 @@ Details worth a reviewer's attention:
 - The super-administrator is not narrowed by the archive state at the database level (same as every managed write, design A3); layer 1 in PR 5c must refuse payer changes in an archived development.
 - `changed_by_user_id` comes from the request-scoped setting that every policy already trusts; it is NULL for the owner login, migrations and jobs.
 - A rollback of this migration drops `units.payer` (stored payers are lost); going forward again backfills `owner`. Roll back only before anyone depends on the payer.
+
+## Review round 1 (no criticals)
+
+- Archived development: staff (administrator, data_entry) are refused with the same 42501 as anyone without rights and nothing changes; the super-administrator is allowed at the database level (pinned by a test; same as every managed write, design A3). **PR 5c must refuse it in layer 1**: binding note in `openspec/changes/developments-units/tasks.md` (`UnitsController::payer` runs the `DevelopmentPolicy` archived check before calling `unit_set_payer`, with an integration test).
+- `occupancies.manage` is pinned: a probe role holding only that code is allowed, a probe role holding every neighboring code (`units.*`, `people.*`) is refused; swapping the code in the function turns it red.
+- `unit_set_payer` evaluates the permission before the NULL test, so a missing and a foreign unit do the same work; the answers stay identical.
+- Test hardening: deletion refusals asserted by constraint name (`unit_payer_changes_unit_fkey`; the occupancy case accepts either foreign key by name because RI trigger order is not a contract); rollback compared with independent literals from the units migration; `changed_at` proven to be the clock at the change; no FK on the user; history readable in an archived development; `modified` touched by a real change.
+- Accepted and documented (migration docblock, `docs/runbooks/units-and-payer-history.md`): units can never be deleted (a controlled owner-login procedure removes a mistaken unit); the owner login can TRUNCATE or disable the trigger and must stay out of application reach (outside the threat model; test cleanup relies on TRUNCATE CASCADE); rollback is lossy once payers changed, back up `units` and `unit_payer_changes` first.
 
 ## Deployment and setup notes
 
