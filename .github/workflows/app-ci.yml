@@ -60,7 +60,7 @@ jobs:
       - name: Create local configuration
         run: composer run-script post-install-cmd --no-interaction
 
-      - name: Provision database roles
+      - name: Provision database roles and the btree_gist extension
         env:
           PGHOST: 127.0.0.1
           PGPORT: 5432
