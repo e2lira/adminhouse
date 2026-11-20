@@ -42,7 +42,18 @@ None.
 
 - The "person has no development column" problem is solved with `Person::inDevelopment($id)` (the controller states the development from the route; a person with none stated is refused everything). 4b-ii must call it before authorizing.
 - Whether a person may be edited at all (a shared person) is decided by the database; the application cannot see links to developments the user cannot see, and says nothing about them (4b-ii shows a neutral refusal).
-- Size: about 580 non-test lines with docblocks (`PeopleTable` 218, `DomainAccess` 123, policies 175, `Person` 57, `UnitsAccess` reduced by 75); well over the 400-line budget, which is why the task was split. About 560 test lines.
+- Intended, pinned by tests and written in design A3: a user may edit their own person even when it is shared with a development they do not manage (own-row branch), and the super-administrator may edit a person linked to an archived development (AD7), which no editor can.
+- Size: about 580 non-test lines with docblocks (`PeopleTable` 218, `DomainAccess` 123, policies 175, `Person` 57, `UnitsAccess` reduced by 75); well over the 400-line budget, which is why the task was split. About 700 test lines (`PeopleTableTest` 462 before the review round, `PeoplePoliciesTest` 236).
+
+## Review round 1
+
+No criticals. Fixes, test first:
+
+- Pinned and documented as intended (design A3): a user edits their own person even when it is shared with a development they do not manage (own-row branch of the update policy); the super-administrator edits a person linked to an archived development (AD7), while every editor is refused (S-3).
+- `PeopleTable::delete()` throws `LogicException` (no route; the database grants DELETE to the super-administrator only).
+- Name, email, phone and RFC reject control characters and non-UTF-8 bytes as field errors (create and edit), instead of a database error.
+- Tests: a valid 255-character email fails only `maxLength`; values at the limits (150, 254, 30, 13) are accepted; a null name is rejected; a running scope narrows the save scope; the archived `createFor` test now has a control success before the archive and checks the count after; non-canonical development ids (`'01'`, `'1abc'`, `' 1'`, `0`, `-1`, `1.0`, `true`, `null`, an overflowing string) are refused by `canView` and `canWrite`; the scope data provider carries its expected names and covers `{A, B}` listing a shared person once.
+- `createFor`'s read-back assumes `people.manage` implies `people.view`; the docblock now cites the `AccessControlTest` gate (no behavior change).
 
 ## Checklist
 

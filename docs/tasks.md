@@ -248,3 +248,5 @@
 | DU-4A-II-R1 | developments-units PR 4a-ii review round 1: people policy proven independently of the link policy, inactive/future/unassigned own-person cases, mixed actor, policy-name snapshot (task 10.13). | DONE (pending review) | build | Claude | 2026-11-19 |
 
 | DU-4B-I | developments-units PR 4b-i: `PeopleTable` (through), `Person`, `createFor()`, write guard for through-mode tables, `PeopleTablePolicy`, `PersonPolicy`, `DomainAccess` (tasks 11.1 to 11.4). | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-4B-I-R1 | developments-units PR 4b-i review round 1: delete refused, control characters rejected, intended edit edge cases pinned and documented (design A3), extra tests. | DONE (pending review) | build | Claude | 2026-11-20 |
