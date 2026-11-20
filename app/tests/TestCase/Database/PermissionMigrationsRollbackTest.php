@@ -254,6 +254,142 @@ class PermissionMigrationsRollbackTest extends DatabaseTestCase
         ];
     }
 
+    private const BEFORE_THE_PAYER = 20261124000001;
+
+    /**
+     * Everything the payer migration (20261125000001) owns or touches, as PostgreSQL prints it: the three functions
+     * (definition, owner, SECURITY DEFINER, config, privileges, volatility), the policies and triggers of both tables,
+     * and the table and column privileges of `units` and the history. A missing object is null or absent.
+     *
+     * @return array<string, mixed>
+     */
+    private function payerState(): array
+    {
+        $functions = [];
+        foreach (['unit_set_payer', 'unit_payer_changes_log', 'unit_payer_changes_reject_change'] as $name) {
+            $row = $this->db()->execute(
+                "SELECT pg_get_functiondef(oid) AS def, prosecdef, pg_get_userbyid(proowner) AS owner,
+                        proconfig::text AS config, proacl::text AS acl, provolatile
+                 FROM pg_proc WHERE proname = ? AND pronamespace = 'public'::regnamespace",
+                [$name],
+            )->fetch('assoc');
+            $functions[$name] = $row === false ? null : $row;
+        }
+        $rows = fn(string $sql): array => $this->db()->execute($sql)->fetchAll();
+
+        return [
+            'functions' => $functions,
+            'policies' => $rows(
+                "SELECT tablename, policyname, cmd, roles::text, qual, with_check FROM pg_policies
+                 WHERE tablename IN ('units', 'unit_payer_changes') ORDER BY tablename, policyname",
+            ),
+            'triggers' => $rows(
+                "SELECT tgrelid::regclass::text, tgname, pg_get_triggerdef(oid) FROM pg_trigger
+                 WHERE NOT tgisinternal AND tgrelid IN (to_regclass('public.units'), to_regclass('public.unit_payer_changes'))
+                 ORDER BY 1, 2",
+            ),
+            'tablePrivileges' => $rows(
+                "SELECT relname, relacl::text, relrowsecurity, relforcerowsecurity FROM pg_class
+                 WHERE oid IN (to_regclass('public.units'), to_regclass('public.unit_payer_changes')) ORDER BY relname",
+            ),
+            'columnPrivileges' => $rows(
+                "SELECT attrelid::regclass::text, attname, attacl::text FROM pg_attribute
+                 WHERE attrelid IN (to_regclass('public.units'), to_regclass('public.unit_payer_changes'))
+                   AND attnum > 0 AND NOT attisdropped AND attacl IS NOT NULL ORDER BY 1, attnum",
+            ),
+            'unitColumns' => $rows(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = 'units' ORDER BY ordinal_position",
+            ),
+            'unitConstraints' => $rows(
+                "SELECT conname FROM pg_constraint WHERE conrelid = to_regclass('public.units') AND contype <> 'n' ORDER BY conname",
+            ),
+        ];
+    }
+
+    public function testRollingBackThePayerMigrationRemovesExactlyItsObjectsAndForwardBringsThemBackWithABackfill(): void
+    {
+        $migrations = new Migrations(['connection' => 'test_migrations']);
+        $development = $this->createDevelopment('Payer rollback');
+        $first = $this->seedUnit($development, null, '1');
+        $second = $this->seedUnit($development, null, '2');
+        $this->db()->execute("UPDATE units SET payer = 'tenant' WHERE id = ?", [$second]);
+
+        $after = $this->payerState();
+        // The control: the forward state is the one the other tests pin.
+        $this->assertCount(3, array_filter($after['functions']));
+        $this->assertSame('{"search_path=pg_catalog, pg_temp"}', $after['functions']['unit_set_payer']['config']);
+        $this->assertCount(1, array_filter($after['policies'], static fn(array $p): bool => $p[0] === 'unit_payer_changes'));
+        $this->assertContains('payer', array_column($after['unitColumns'], 0));
+        $this->assertContains('units_payer_check', array_column($after['unitConstraints'], 0));
+        $this->assertSame(3, (int)$this->db()->execute('SELECT COUNT(*) FROM unit_payer_changes')->fetch()[0]);
+
+        $failure = null;
+        try {
+            $this->assertTrue($migrations->rollback(['target' => self::BEFORE_THE_PAYER]));
+            $before = $this->payerState();
+
+            // Functions, history table, its policy and triggers, the logging triggers of `units`, the column and its
+            // CHECK are all gone; nothing else changed.
+            $this->assertSame(['unit_set_payer' => null, 'unit_payer_changes_log' => null, 'unit_payer_changes_reject_change' => null], $before['functions']);
+            $this->assertNull($this->db()->execute("SELECT to_regclass('public.unit_payer_changes')")->fetch()[0]);
+            $this->assertSame([], array_values(array_filter($before['policies'], static fn(array $p): bool => $p[0] === 'unit_payer_changes')));
+            $this->assertSame(['units_forbid_development_change'], array_column($before['triggers'], 1));
+            $this->assertNotContains('payer', array_column($before['unitColumns'], 0));
+            $this->assertNotContains('units_payer_check', array_column($before['unitConstraints'], 0));
+            // The privileges of `units` are exactly the ones the units migration left: those of the forward state
+            // (the payer had no column privilege, and the table-level privileges are untouched).
+            $this->assertSame(
+                array_values(array_filter($after['tablePrivileges'], static fn(array $r): bool => $r[0] === 'units')),
+                $before['tablePrivileges'],
+            );
+            $this->assertSame(
+                array_values(array_filter($after['columnPrivileges'], static fn(array $r): bool => $r[0] === 'units')),
+                $before['columnPrivileges'],
+            );
+            $this->assertSame(
+                array_values(array_filter($after['policies'], static fn(array $p): bool => $p[0] === 'units')),
+                array_values(array_filter($before['policies'], static fn(array $p): bool => $p[0] === 'units')),
+            );
+            $this->assertSame(
+                array_values(array_filter($after['triggers'], static fn(array $t): bool => $t[1] === 'units_forbid_development_change')),
+                $before['triggers'],
+            );
+            // A unit created while the migration is rolled back has no history yet.
+            $this->seedUnit($development, null, '3');
+        } catch (Throwable $e) {
+            $failure = $e;
+        }
+
+        $restoreError = null;
+        try {
+            $restored = $migrations->migrate();
+        } catch (Throwable $e) {
+            $restored = false;
+            $restoreError = $e;
+        }
+        if ($failure !== null) {
+            throw $failure;
+        }
+        if (!$restored) {
+            throw new RuntimeException('The migrations could not be applied again', 0, $restoreError);
+        }
+
+        // Forward again: every object is back exactly as before.
+        $this->assertSame($after, $this->payerState());
+        // Backfill: one row per existing unit (the one made while rolled back included), carrying the payer the
+        // column came back with (the default: a rollback drops the stored payers), no user, and the creation time.
+        $rows = $this->db()->execute(
+            'SELECT h.unit_id, h.payer, h.changed_by_user_id, h.changed_at = u.created, h.development_id = u.development_id
+             FROM unit_payer_changes h JOIN units u ON u.id = h.unit_id ORDER BY h.unit_id',
+        )->fetchAll();
+        $this->assertCount(3, $rows);
+        $this->assertSame($first, (int)$rows[0][0]);
+        foreach ($rows as $row) {
+            $this->assertSame(['owner', null, true, true], [$row[1], $row[2], (bool)$row[3], (bool)$row[4]]);
+        }
+        $this->assertSame(3, (int)$this->db()->execute('SELECT COUNT(*) FROM units')->fetch()[0]);
+    }
+
     public function testRollingBackRestoresTheMatrixTheThreeMigrationsFoundAndForwardRestoresTheirs(): void
     {
         $migrations = new Migrations(['connection' => 'test_migrations']);

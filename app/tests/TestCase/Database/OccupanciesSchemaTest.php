@@ -319,8 +319,8 @@ class OccupanciesSchemaTest extends DatabaseTestCase
         $this->assertSame(self::FOREIGN_KEY, $development[0]);
         $this->assertSame(1, (int)$this->db()->execute('SELECT COUNT(*) FROM occupancies')->fetch()[0]);
         $this->assertSame(1, (int)$this->db()->execute('SELECT COUNT(*) FROM units WHERE id = ?', [$this->unitA])->fetch()[0]);
-        // Without occupancies the same unit is deletable: the refusal comes from the occupancy.
-        $this->assertSame([null, null], $this->attempt('DELETE FROM units WHERE id = ?', [$this->unitA2]));
+        // A unit without occupancies is refused too since PR 5b: every unit has payer history (ON DELETE RESTRICT).
+        $this->assertSame(['23001', null], $this->attempt('DELETE FROM units WHERE id = ?', [$this->unitA2]));
     }
 
     public function testSettingTheSameEndDateAgainIsAcceptedAndChangesNothing(): void

@@ -233,6 +233,8 @@ class AccessControlTest extends DatabaseTestCase
             // A5: occupancies are read through people.view (they say who lives in which unit), written through
             // occupancies.manage, so every role that writes them must also read people.
             'occupancies' => ['occupancies.manage', 'people.view'],
+            // A6: the payer history is read through units.view; whoever changes the payer must be able to see the log.
+            'payer history' => ['occupancies.manage', 'units.view'],
         ];
     }
 

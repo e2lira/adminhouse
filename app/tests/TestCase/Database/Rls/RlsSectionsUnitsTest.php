@@ -328,6 +328,14 @@ class RlsSectionsUnitsTest extends RlsTestCase
         $this->assertRowsUntouched($table);
 
         $this->actAs($this->superUser);
+        if ($table === 'units') {
+            // The policy lets the super-administrator through (a blocked DELETE matches no row, it does not raise);
+            // what refuses is the payer history every unit has (PR 5b, ON DELETE RESTRICT: 23001).
+            $this->assertSame('23001', $this->sqlStateOf("DELETE FROM units WHERE development_id = {$this->devA}"));
+            $this->assertRowsUntouched($table);
+
+            return;
+        }
         $this->assertAllowed("DELETE FROM {$table} WHERE development_id = {$this->devA}");
         $this->commitSession();
         $column = $this->labelColumn($table);
