@@ -36,6 +36,7 @@ class PeopleController extends AppController
     private const FIELDS = ['name', 'email', 'phone', 'rfc'];
     private const NOT_SAVED = 'No se pudo guardar a la persona.';
     private const NOT_CREATED = 'No se pudo crear a la persona en este desarrollo.';
+    private const NO_CONTROL = 'No puede contener caracteres de control.';
     private const NOT_ALLOWED = 'No tienes permiso para modificar los datos de esta persona.';
 
     /**
@@ -43,15 +44,23 @@ class PeopleController extends AppController
      */
     private const ERRORS = [
         'name' => [
+            'noControl' => self::NO_CONTROL,
             'maxLength' => 'El nombre no puede tener más de 150 caracteres.',
             '*' => 'Escribe el nombre.',
         ],
         'email' => [
+            'noControl' => self::NO_CONTROL,
             'email' => 'Escribe un correo electrónico válido.',
             'maxLength' => 'El correo electrónico no puede tener más de 254 caracteres.',
         ],
-        'phone' => ['maxLength' => 'El teléfono no puede tener más de 30 caracteres.'],
-        'rfc' => ['maxLength' => 'El RFC no puede tener más de 13 caracteres.'],
+        'phone' => [
+            'noControl' => self::NO_CONTROL,
+            'maxLength' => 'El teléfono no puede tener más de 30 caracteres.',
+        ],
+        'rfc' => [
+            'noControl' => self::NO_CONTROL,
+            'maxLength' => 'El RFC no puede tener más de 13 caracteres.',
+        ],
     ];
 
     /**
@@ -79,7 +88,11 @@ class PeopleController extends AppController
             'sortableFields' => ['People.name', 'People.email'],
         ]);
 
-        $this->set(['development' => $development, 'people' => $people, 'canManage' => $this->canWriteIn($development)]);
+        $this->set([
+            'development' => $development,
+            'people' => $people,
+            'canManage' => $this->canWriteIn($development),
+        ]);
     }
 
     /**
@@ -174,7 +187,8 @@ class PeopleController extends AppController
      */
     private function scopeOf(Development $development): DevelopmentScope
     {
-        return DevelopmentScope::only([(int)$development->id])->intersect($this->DevelopmentScope->for(PeopleAccess::VIEW));
+        return DevelopmentScope::only([(int)$development->id])
+            ->intersect($this->DevelopmentScope->for(PeopleAccess::VIEW));
     }
 
     /**

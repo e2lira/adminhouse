@@ -3,9 +3,13 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Controller;
 
+use App\Authorization\DevelopmentScope;
+use App\Model\Entity\Person;
 use App\Test\Support\DatabaseTestCase;
 use App\Test\Support\SignsInTrait;
+use ArrayObject;
 use Cake\Core\Configure;
+use Cake\Event\EventInterface;
 use Cake\Event\EventManager;
 use Cake\TestSuite\IntegrationTestTrait;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -484,6 +488,8 @@ class PeopleControllerTest extends DatabaseTestCase
      * No existence oracle: the email of a person of another development, the email of a person of this one and a new
      * email all get the same answer (people have no unique email or RFC, so nothing can differ).
      */
+    // The next test pins that no unique index exists on people: without one a duplicate cannot be told apart.
+
     public function testCreatingAPersonWhoseEmailOrRfcExistsElsewhereGivesTheSameOutcome(): void
     {
         $other = $this->createPerson('Beto de Sur', [$this->devB]);
@@ -695,5 +701,152 @@ class PeopleControllerTest extends DatabaseTestCase
         $this->post($this->base($this->devA) . '/link', ['person_id' => (string)$person]);
         $this->assertResponseCode(404);
         $this->assertSame(1, $this->peopleCount());
+    }
+
+    // --- review round 1 -----------------------------------------------------------------------------------------------
+
+    /**
+     * The scope the edit is saved under is the MANAGE scope: the user writes in A and only reads in B, so the save
+     * scope must allow A and not B. The entity policy already refuses a user who cannot write in the development of
+     * the URL, so only what the table is handed shows which scope the controller picked.
+     */
+    public function testAnEditIsSavedUnderTheManageScopeAndNotTheViewScope(): void
+    {
+        $person = $this->createPerson('Ana de Norte', [$this->devA]);
+        $user = $this->signInWith('data_entry');
+        $this->assignRole($user, 'accountant', $this->devB);
+        $this->enableCsrfToken();
+        $scopes = [];
+        $capture = function (EventInterface $event, mixed $entity, ArrayObject $options) use (&$scopes): void {
+            if ($entity instanceof Person) {
+                $scopes[] = $options['developmentScope'] ?? null;
+            }
+        };
+        EventManager::instance()->on('Model.beforeSave', $capture);
+
+        try {
+            $this->post($this->base($this->devA) . '/' . $person . '/edit', $this->payload(['name' => 'Ana editada']));
+        } finally {
+            EventManager::instance()->off('Model.beforeSave', $capture);
+        }
+
+        $this->assertRedirect($this->base($this->devA));
+        $this->assertCount(1, $scopes);
+        $this->assertInstanceOf(DevelopmentScope::class, $scopes[0]);
+        $this->assertTrue($scopes[0]->allows($this->devA));
+        $this->assertFalse($scopes[0]->allows($this->devB));
+    }
+
+    private function seedPeople(int $count): void
+    {
+        for ($i = 1; $i <= $count; $i++) {
+            $this->db()->execute(
+                'INSERT INTO people (name, rfc, created, modified) VALUES (?, ?, NOW(), NOW())',
+                [sprintf('P%03d', $i), sprintf('R%03d', $count + 1 - $i)],
+            );
+            $id = (int)$this->db()->execute('SELECT id FROM people WHERE name = ?', [sprintf('P%03d', $i)])->fetch()[0];
+            $this->db()->execute('INSERT INTO person_developments (person_id, development_id) VALUES (?, ?)', [$id, $this->devA]);
+        }
+    }
+
+    public function testTheListIsPaginatedAtOneHundredAndTheLimitCannotBeRaised(): void
+    {
+        $this->seedPeople(101);
+        $this->signInWith('administrator');
+
+        $this->get($this->base($this->devA));
+        $first = (string)$this->_response->getBody();
+        $this->assertSame(100, preg_match_all('#>P\d{3}</td>#', $first));
+        $this->assertStringContainsString('P100', $first);
+        $this->assertStringNotContainsString('P101', $first);
+        $this->assertStringContainsString('page=2', $first);
+
+        $this->get($this->base($this->devA) . '?page=2');
+        $second = (string)$this->_response->getBody();
+        $this->assertSame(1, preg_match_all('#>P\d{3}</td>#', $second));
+        $this->assertStringContainsString('P101', $second);
+
+        $this->get($this->base($this->devA) . '?limit=1000');
+        $this->assertSame(100, preg_match_all('#>P\d{3}</td>#', (string)$this->_response->getBody()));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function unlistedSorts(): array
+    {
+        return ['rfc' => ['rfc'], 'People.rfc' => ['People.rfc'], 'phone' => ['phone']];
+    }
+
+    #[DataProvider('unlistedSorts')]
+    public function testSortingByAFieldThatIsNotListedIsIgnored(string $sort): void
+    {
+        $this->seedPeople(3);
+        $this->signInWith('administrator');
+
+        foreach (['asc', 'desc'] as $direction) {
+            $this->get($this->base($this->devA) . '?sort=' . $sort . '&direction=' . $direction);
+
+            $this->assertResponseOk();
+            $body = (string)$this->_response->getBody();
+            $this->assertLessThan(strpos($body, 'P002'), strpos($body, 'P001'), 'still ordered by name');
+            $this->assertLessThan(strpos($body, 'P003'), strpos($body, 'P002'), 'still ordered by name');
+        }
+    }
+
+    public function testNothingUniqueConstrainsEmailOrRfcSoADuplicateCannotDifferFromAnyOtherCreation(): void
+    {
+        $unique = $this->db()->execute(
+            "SELECT indexdef FROM pg_indexes WHERE tablename = 'people' AND indexdef ILIKE '%UNIQUE%'
+               AND indexname <> 'people_pkey'",
+        )->fetchAll();
+
+        $this->assertSame([], $unique);
+    }
+
+    /**
+     * @return array<string, array{array<string, string>, string}>
+     */
+    public static function invalidEdits(): array
+    {
+        return [
+            'email' => [['email' => 'no-es-correo'], 'Escribe un correo electrónico válido.'],
+            'rfc too long' => [['rfc' => 'ABCDEFGHIJKLMN'], 'El RFC no puede tener más de 13 caracteres.'],
+            'control character' => [['phone' => "55\x07"], 'No puede contener caracteres de control.'],
+            'control character in the name' => [['name' => "Ana\0Perez"], 'No puede contener caracteres de control.'],
+        ];
+    }
+
+    /**
+     * @param array<string, string> $change Fields to replace.
+     * @param string $message Spanish copy expected.
+     */
+    #[DataProvider('invalidEdits')]
+    public function testInvalidValuesOnEditAreFieldErrorsAndTheRowIsKept(array $change, string $message): void
+    {
+        $person = $this->createPerson('Ana de Norte', [$this->devA]);
+        $this->signInWith('data_entry');
+        $this->enableCsrfToken();
+        $before = $this->personRow('Ana de Norte');
+
+        $this->post($this->base($this->devA) . '/' . $person . '/edit', $change + $this->payload(['name' => 'Ana de Norte']));
+
+        $this->assertResponseOk();
+        $this->assertResponseContains($message);
+        $this->assertResponseContains('No se pudo guardar a la persona.');
+        $this->assertSame($before, $this->personRow('Ana de Norte'));
+    }
+
+    public function testControlCharactersOnAddAreAFieldErrorInSpanishAndNothingIsStored(): void
+    {
+        $this->signInWith('data_entry');
+        $this->enableCsrfToken();
+
+        $this->post($this->base($this->devA) . '/add', $this->payload(['email' => "a\0b@example.test"]));
+        $this->post($this->base($this->devA) . '/add', $this->payload(['name' => "Ana\x07"]));
+
+        $this->assertResponseOk();
+        $this->assertResponseContains('No puede contener caracteres de control.');
+        $this->assertSame(0, $this->peopleCount());
     }
 }
