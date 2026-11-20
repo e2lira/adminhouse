@@ -294,6 +294,7 @@ Tasks:
 - [x] 10.10 GREEN: migration `20261123000002_PeopleReadByPermission` replaces `people_select` and `person_developments_select`; `down()` restores the `dev_ids()` policies verbatim.
 - [x] 10.11 `PermissionMigrationsRollbackTest`: exact qual, with_check, cmd and roles of both policies before and after `down()` and after the second `up()`.
 - [x] 10.12 Hand mutations red and restored (test-results); docs: ADR-0005 notes 6 and 8, design A2, this section.
+- [x] 10.13 Review round 1 (test-only): `people_select` proven with the link policy opened wide; own-person cases per inactive/future/unassigned user; links before and after archive; mixed administrator-and-guard actor; no-context read; `pg_policies` substring check; rollback test compares policy names and commands.
 
 Note: a job context now reads no person (no production code did). `users`, `role_assignments`, `auth_*` functions and `person_id()` do not read `people` and are unchanged; definer functions run as owner and bypass RLS.
 

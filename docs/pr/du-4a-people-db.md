@@ -31,7 +31,7 @@ PR 4a of `developments-units` (tasks 10.1 to 10.8; spec people: Create person th
 
 ## Database and row-level security
 
-Database change: two permission seeds, one new definer function, one replaced definer function body, one replaced policy.
+Database change: two permission seeds, one new definer function, one replaced definer function body, one replaced policy. The people SELECT policy is left on `dev_ids()` here and moved to `people.view` by the next slice, PR 4a-ii (`docs/pr/du-4a-ii-people-read-permission.md`).
 
 - [x] New tables use `App\Database\RowLevelSecurity` helpers: no new table. The existing `people` table keeps its INSERT-less policies; only `people_update` is replaced.
 - [x] Policy tests added under `app/tests/TestCase/Database/Rls` (`RlsPeopleTest`: administrator, data_entry, accountant, supervisor, guard, resident, read-only, disabled, ended and future assignments, a user with no assignment, no session, a job, a user of another development, the super-administrator).

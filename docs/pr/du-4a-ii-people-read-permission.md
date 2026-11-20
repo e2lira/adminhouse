@@ -40,11 +40,16 @@ Details worth a reviewer's attention:
 
 - Write implies read: `person_create`'s RETURNING and the UPDATE policy's WHERE run under the new SELECT policy. `people.manage` is only seeded together with `people.view` (`AccessControlTest`), and the full 4a people tests still pass.
 - View codes keep archived developments (`permission_dev_ids`), so people of an archived development stay readable; writes there are still refused.
+- No existence oracle for hidden people: `people` has no unique email or RFC (a duplicate is accepted, so a create cannot reveal one), and `person_create` raises the same error for a development the caller cannot manage, one that does not exist and a NULL one (4a, tested). The foreign-key and uniqueness checks that bypass RLS do not touch `people` columns a caller can choose.
 - Existing definer functions (`auth_*`, `person_create`, `person_in_permission_scope`, `person_in_admin_scope`, `person_id()`) run as the owner and bypass RLS, so they behave as before. `users`, `role_assignments` and `auth_events` policies do not read `people` and are unchanged.
 
 ## Job impact
 
 `permission_dev_ids` is request-only, so a job context now reads no person at all (before: the people of its developments). The only reader of people in a job context was `RlsTenancyPoliciesTest` (expectation updated). No production code (commands, jobs, services) reads `people` today; PR 4b will add request-time screens only. A future job that needs people needs its own mechanism (a definer function or an explicit job policy), decided with that job (ADR-0005 note 8).
+
+## Review round 1
+
+No criticals, no code defects; test-only fixes, test first where they could fail. `people_select` is now proven independently of the link policy: the test opens `person_developments_select` to `true` as owner, restores it in `finally`, and a resident, a guard and a read-only holder still read only what `people.view` allows (it kills the mutant that reverts only `people_select` to `dev_ids()`, red then restored). Also: the inactive account, the future assignment and the user without assignment each have a person of their own (inactive reads nothing, the others only their own); links asserted before and after the archive; a mixed administrator of A and guard of B reads the people of A and nothing of B; a connection without context reads nothing; a `pg_policies` check that both SELECT policies name `permission_dev_ids('people.view'` and not ` dev_ids()`; the rollback test also compares the full list of policy names and commands of both tables after `down()` and after `up()`.
 
 ## Deployment and setup notes
 

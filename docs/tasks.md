@@ -244,3 +244,5 @@
 | DU-4A-R1 | developments-units PR 4a review round 1: exact rollback-state comparison, atomicity and visibility tests, super-administrator cases, scope function evaluated once, ADR-0005 notes 8 and 9. | DONE (pending review) | build | Claude | 2026-11-19 |
 
 | DU-4A-II | developments-units PR 4a-ii: people and person_developments reads follow `people.view` (migration `20261123000002`, design A2, tasks 10.9 to 10.12). | DONE (pending review) | build | Claude | 2026-11-19 |
+
+| DU-4A-II-R1 | developments-units PR 4a-ii review round 1: people policy proven independently of the link policy, inactive/future/unassigned own-person cases, mixed actor, policy-name snapshot (task 10.13). | DONE (pending review) | build | Claude | 2026-11-19 |
