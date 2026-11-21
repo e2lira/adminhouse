@@ -16,6 +16,7 @@ use Cake\ORM\Entity;
  * @property string|null $lot_area_m2
  * @property string|null $indiviso_pct
  * @property bool $is_active
+ * @property string $payer Read only here: only the database function `unit_set_payer` changes it (design AD11).
  * @property \Cake\I18n\DateTime $created
  * @property \Cake\I18n\DateTime $modified
  * @property \App\Model\Entity\Section|null $section

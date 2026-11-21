@@ -11,7 +11,9 @@ use App\Model\Table\UnitsTable;
 use App\Test\Support\DatabaseTestCase;
 use Closure;
 use LogicException;
+use PDOException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Throwable;
 
 /**
  * Units under layer 1: scoped reads and writes, bulk statements refused, validation that mirrors the database checks,
@@ -421,6 +423,57 @@ class UnitsTableTest extends DatabaseTestCase
         $this->units->patchEntity($unit, ['is_active' => false, 'number' => '102']);
         $this->assertTrue($unit->is_active);
         $this->assertSame('102', $unit->number);
+    }
+
+    public function testThePayerIsNeverAssignedFromRequestDataAndTheTableNeverWritesIt(): void
+    {
+        $north = $this->createDevelopment('Norte');
+        $id = $this->seedUnit($north, null, '101');
+        $this->actAsSuperAdministrator();
+        $scope = DevelopmentScope::only([$north]);
+
+        $created = $this->units->newEntity(self::payload(['payer' => 'tenant', 'number' => '900']));
+        $this->assertNull($created->get('payer'));
+        $this->assertNotFalse($this->units->save($created, $this->saveIn($north)));
+
+        // An edit of a unit read from the database (its `payer` is loaded) leaves the payer alone.
+        $unit = $this->units->get($id, developmentScope: $scope);
+        $this->units->patchEntity($unit, ['payer' => 'tenant', 'number' => '102']);
+        $this->assertSame('owner', $unit->get('payer'));
+        $this->assertNotFalse($this->units->save($unit, ['developmentScope' => $scope]));
+        $this->commitSession();
+
+        $this->assertSame(
+            [['owner'], ['owner']],
+            $this->db()->execute('SELECT payer FROM units ORDER BY id')->fetchAll(),
+        );
+    }
+
+    public function testAPayerSetByHandIsRefusedByTheDatabaseEvenForTheSuperAdministrator(): void
+    {
+        $north = $this->createDevelopment('Norte');
+        $id = $this->seedUnit($north, null, '101');
+        $this->actAsSuperAdministrator();
+        $scope = DevelopmentScope::only([$north]);
+        $unit = $this->units->get($id, developmentScope: $scope);
+        $unit->set('payer', 'tenant');
+
+        $state = null;
+        try {
+            $this->units->save($unit, ['developmentScope' => $scope]);
+        } catch (Throwable $e) {
+            for (; $e !== null; $e = $e->getPrevious()) {
+                if ($e instanceof PDOException && isset($e->errorInfo[0])) {
+                    $state = (string)$e->errorInfo[0];
+                    break;
+                }
+            }
+        }
+
+        // 42501: the runtime role has no UPDATE privilege on the payer column (S-2); only unit_set_payer changes it.
+        $this->assertSame('42501', $state);
+        $this->endSession();
+        $this->assertSame('owner', $this->db()->execute('SELECT payer FROM units WHERE id = ?', [$id])->fetch()[0]);
     }
 
     public function testAUnitCanBeDeactivatedAndReactivatedWithoutLosingTheRow(): void

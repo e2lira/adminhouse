@@ -79,7 +79,7 @@ class OccupanciesSchemaTest extends DatabaseTestCase
         } catch (Throwable $e) {
             for (; $e !== null; $e = $e->getPrevious()) {
                 if ($e instanceof PDOException && isset($e->errorInfo[0])) {
-                    $named = preg_match('/occupancies_[a-z_]+|person_developments_[a-z_]+/', (string)$e->errorInfo[2], $match) === 1;
+                    $named = preg_match('/occupancies_[a-z_]+|person_developments_[a-z_]+|unit_payer_changes_[a-z_]+/', (string)$e->errorInfo[2], $match) === 1;
 
                     return [(string)$e->errorInfo[0], $named ? $match[0] : null];
                 }
@@ -313,14 +313,20 @@ class OccupanciesSchemaTest extends DatabaseTestCase
         $this->own($this->unitA, $this->ana, 'owner', true, '2026-01-01');
 
         $unit = $this->attempt('DELETE FROM units WHERE id = ?', [$this->unitA]);
-        $this->assertSame([self::FOREIGN_KEY, 'occupancies_unit_fkey'], $unit);
+        // Two foreign keys hold this unit: the occupancy (NO ACTION, 23503) and the payer history (RESTRICT, 23001).
+        // PostgreSQL fires their triggers in creation order, which is not a contract, so either refusal is accepted,
+        // each by its own name; the history case alone is asserted strictly below.
+        $this->assertContains($unit, [
+            [self::FOREIGN_KEY, 'occupancies_unit_fkey'],
+            ['23001', 'unit_payer_changes_unit_fkey'],
+        ]);
         // A development is also held by its units, which are checked too: the refusal is a foreign key either way.
         $development = $this->attempt('DELETE FROM developments WHERE id = ?', [$this->devA]);
         $this->assertSame(self::FOREIGN_KEY, $development[0]);
         $this->assertSame(1, (int)$this->db()->execute('SELECT COUNT(*) FROM occupancies')->fetch()[0]);
         $this->assertSame(1, (int)$this->db()->execute('SELECT COUNT(*) FROM units WHERE id = ?', [$this->unitA])->fetch()[0]);
-        // Without occupancies the same unit is deletable: the refusal comes from the occupancy.
-        $this->assertSame([null, null], $this->attempt('DELETE FROM units WHERE id = ?', [$this->unitA2]));
+        // A unit without occupancies is refused too since PR 5b: every unit has payer history (ON DELETE RESTRICT).
+        $this->assertSame(['23001', 'unit_payer_changes_unit_fkey'], $this->attempt('DELETE FROM units WHERE id = ?', [$this->unitA2]));
     }
 
     public function testSettingTheSameEndDateAgainIsAcceptedAndChangesNothing(): void

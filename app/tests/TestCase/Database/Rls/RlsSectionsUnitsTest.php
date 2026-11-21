@@ -4,7 +4,9 @@ declare(strict_types=1);
 namespace App\Test\TestCase\Database\Rls;
 
 use App\Database\RowLevelSecurity;
+use PDOException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Throwable;
 
 /**
  * Row-level security of the managed domain tables `sections` and `units` (spec units: Database enforcement; design
@@ -328,6 +330,31 @@ class RlsSectionsUnitsTest extends RlsTestCase
         $this->assertRowsUntouched($table);
 
         $this->actAs($this->superUser);
+        if ($table === 'units') {
+            // The policy lets the super-administrator through (a blocked DELETE matches no row, it does not raise);
+            // what refuses is the payer history every unit has (PR 5b, ON DELETE RESTRICT: 23001).
+            // Deleting a unit is intentionally unreachable: the refusal names the history constraint, not a policy.
+            $connection = $this->appDb();
+            $connection->execute('SAVEPOINT unit_delete');
+            $message = null;
+            try {
+                $connection->execute("DELETE FROM units WHERE development_id = {$this->devA}");
+            } catch (Throwable $e) {
+                for (; $e !== null; $e = $e->getPrevious()) {
+                    if ($e instanceof PDOException && isset($e->errorInfo[0])) {
+                        $message = [(string)$e->errorInfo[0], (string)$e->errorInfo[2]];
+                        break;
+                    }
+                }
+            }
+            $connection->execute('ROLLBACK TO SAVEPOINT unit_delete');
+            $this->assertNotNull($message);
+            $this->assertSame('23001', $message[0]);
+            $this->assertStringContainsString('unit_payer_changes_unit_fkey', $message[1]);
+            $this->assertRowsUntouched($table);
+
+            return;
+        }
         $this->assertAllowed("DELETE FROM {$table} WHERE development_id = {$this->devA}");
         $this->commitSession();
         $column = $this->labelColumn($table);
